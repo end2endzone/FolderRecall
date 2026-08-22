@@ -81,7 +81,11 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 			continue
 		}
 
-		ds.paths = append(ds.paths, path.ToString())
+		dir := Directory{
+			Id:   InvalidId,
+			Path: path.ToString(),
+		}
+		ds.Directories = append(ds.Directories, dir)
 	}
 
 	return ds, nil

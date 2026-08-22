@@ -356,8 +356,8 @@ func cmdPrint(cfg Config) error {
 
 	fmt.Printf("\n")
 	fmt.Printf("Directories at %s : \n\n", snapshot.TimeStamp)
-	for idx, path := range snapshot.paths {
-		fmt.Printf("%02d: %s\n", idx, path)
+	for idx, dir := range snapshot.Directories {
+		fmt.Printf("%02d: %s\n", idx, dir.Path)
 	}
 
 	return nil

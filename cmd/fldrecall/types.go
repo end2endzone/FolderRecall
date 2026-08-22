@@ -5,15 +5,23 @@ import (
 	"time"
 )
 
+const InvalidId = -1
+
+type Directory struct {
+	Id   int
+	Path string
+}
+
 type Snapshot struct {
-	TimeStamp time.Time
-	paths     []string
+	Id          int
+	TimeStamp   time.Time
+	Directories []Directory
 }
 
 func (ds Snapshot) Sort() {
-	sort.Slice(ds.paths, func(i, j int) bool {
-		dir1 := ds.paths[i]
-		dir2 := ds.paths[j]
+	sort.Slice(ds.Directories, func(i, j int) bool {
+		dir1 := ds.Directories[i].Path
+		dir2 := ds.Directories[j].Path
 		return dir1 < dir2
 	})
 }

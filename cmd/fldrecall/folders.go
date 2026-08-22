@@ -7,10 +7,10 @@ import (
 	"github.com/go-ole/go-ole/oleutil"
 )
 
-func GetCurrentDirectoriesSnapshot() (DirectorySnapshot, error) {
+func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 	now := time.Now().Round(0)
 
-	ds := DirectorySnapshot{
+	ds := Snapshot{
 		TimeStamp: now,
 	}
 

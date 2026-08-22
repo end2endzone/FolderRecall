@@ -1,12 +1,18 @@
 package main
 
 import (
+	"time"
+
 	ole "github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
 )
 
 func GetCurrentDirectoriesSnapshot() (DirectorySnapshot, error) {
-	ds := DirectorySnapshot{}
+	now := time.Now().Round(0)
+
+	ds := DirectorySnapshot{
+		TimeStamp: now,
+	}
 
 	// Create shell.application object
 	unknown, err := oleutil.CreateObject("Shell.Application")

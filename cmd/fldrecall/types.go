@@ -1,9 +1,13 @@
 package main
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 type DirectorySnapshot struct {
-	paths []string
+	TimeStamp time.Time
+	paths     []string
 }
 
 func (ds DirectorySnapshot) Sort() {

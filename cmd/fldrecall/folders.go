@@ -75,7 +75,7 @@ func GetCurrentDirectoriesSnapshot() (DirectorySnapshot, error) {
 			continue
 		}
 
-		ds.directories = append(ds.directories, path.ToString())
+		ds.paths = append(ds.paths, path.ToString())
 	}
 
 	return ds, nil

@@ -354,7 +354,7 @@ func cmdPrint(cfg Config) error {
 
 	snapshot.Sort()
 
-	for idx, path := range snapshot.directories {
+	for idx, path := range snapshot.paths {
 		fmt.Printf("%02d: %s\n", idx, path)
 	}
 

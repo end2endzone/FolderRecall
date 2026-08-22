@@ -3,13 +3,13 @@ package main
 import "sort"
 
 type DirectorySnapshot struct {
-	directories []string
+	paths []string
 }
 
 func (ds DirectorySnapshot) Sort() {
-	sort.Slice(ds.directories, func(i, j int) bool {
-		dir1 := ds.directories[i]
-		dir2 := ds.directories[j]
+	sort.Slice(ds.paths, func(i, j int) bool {
+		dir1 := ds.paths[i]
+		dir2 := ds.paths[j]
 		return dir1 < dir2
 	})
 }

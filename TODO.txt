@@ -1,0 +1,11 @@
+- Define an application name:
+  - fldrecall
+  - naviback
+  - dirlogr
+  - navilogr
+  - fldlogr
+  - dirrecall
+  - dirback
+  - navirecall
+- Convert powershell expression: $directories = @((New-Object -com shell.application).Windows()).Document.Folder.Self.Path
+- Define an icon for the executable

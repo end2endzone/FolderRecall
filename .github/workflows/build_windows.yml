@@ -1,0 +1,141 @@
+name: Windows
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*' # Triggers on any tag starting with 'v' (e.g., v1.0.0)
+      - '*' # Triggers on any tag name
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# env:
+
+jobs:
+  build:
+    # For a list of available runner types, refer to
+    # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+
+    - name: Configure GIT
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: |
+        git config --local core.autocrlf true
+        git config --local advice.detachedHead false
+        git submodule update --init --recursive
+
+    - name: Setup python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.x' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+        architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: Create new environment variables
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: |
+        python -c "import os; print('GIT_REPOSITORY=' + os.path.split(os.getenv('GITHUB_REPOSITORY'))[1]);" >> %GITHUB_ENV%
+        python -c "import os; print('GIT_BRANCH=' + os.path.split(os.getenv('GITHUB_REF'))[1]);" >> %GITHUB_ENV%
+        echo GITHUB_WORKFLOW=%GITHUB_WORKFLOW%>> %GITHUB_ENV%
+
+    - name: List environment variables for debugging
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: |
+        set
+
+    - name: Deploy 'tests not available' badge before building
+      env:
+        GH_TOKEN: ${{ secrets.BADGES }}
+        GIST_ID: "58cf6c72c08e706335337d5ef9ca48e8"
+        FILE_PATH: ./ci/github/tests_not_available.badge.json
+        GIST_FILENAME: "${{env.GIT_REPOSITORY}}.${{env.GIT_BRANCH}}.${{env.GITHUB_WORKFLOW}}.json"
+      shell: pwsh
+      run: .\ci\windows\upload-to-gist.ps1
+
+    - name: Install gotestsum
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: go install gotest.tools/gotestsum@latest
+
+    - name: Build windows amd64
+      env:
+        GOOS: windows
+        GOARCH: amd64
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: call ci\windows\build.bat
+
+    - name: Build windows arm64
+      env:
+        GOOS: windows
+        GOARCH: arm64
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: call ci\windows\build.bat
+
+    - name: Test
+      id: unit_tests
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: call ci\windows\test.bat
+
+    - name: Search unit test report file
+      if: success() || steps.unit_tests.conclusion == 'failure'
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: |
+        for /f "tokens=* usebackq" %%f in (`dir/b/s test-report*.xml`) do (set UNITTEST_REPORT_PATH=%%f)
+        echo UNITTEST_REPORT_PATH=%UNITTEST_REPORT_PATH%
+        echo UNITTEST_REPORT_PATH=%UNITTEST_REPORT_PATH%>> %GITHUB_ENV%
+      
+    - name: Create test badge
+      if: success() || steps.unit_tests.conclusion == 'failure'
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: python ci\github\maketestbadge.py ${{env.UNITTEST_REPORT_PATH}}
+      
+    - name: Deploy test badge to Gist
+      if: success() || steps.unit_tests.conclusion == 'failure'
+      env:
+        GH_TOKEN: ${{ secrets.BADGES }}
+        GIST_ID: "58cf6c72c08e706335337d5ef9ca48e8"
+        FILE_PATH: "badge.json"
+        GIST_FILENAME: "${{env.GIT_REPOSITORY}}.${{env.GIT_BRANCH}}.${{env.GITHUB_WORKFLOW}}.json"
+      shell: pwsh
+      run: .\ci\windows\upload-to-gist.ps1
+
+    - name: Archive test results
+      if: success() || steps.unit_tests.conclusion == 'failure'
+      uses: actions/upload-artifact@v7
+      with:
+        name: unit-test-results
+        path: ${{env.UNITTEST_REPORT_PATH}}
+
+    - name: Get version
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: |
+        set /p PRODUCT_VERSION=<"VERSION"
+        echo PRODUCT_VERSION=%PRODUCT_VERSION%
+        echo PRODUCT_VERSION=%PRODUCT_VERSION%>> %GITHUB_ENV%
+        echo.
+        call ci\windows\print-version.bat
+    
+    - name: Archive installation packages
+      if: success() || steps.unit_tests.conclusion == 'failure'
+      uses: actions/upload-artifact@v7
+      with:
+        name: Installation packages (windows).
+        path: bin/fldrecall-*-* # fldrecall-$OsType-$CpuArchitecture.exe
+        if-no-files-found: error

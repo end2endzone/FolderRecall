@@ -1,0 +1,121 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "go: clean",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "./ci/linux/clean.sh",
+            "windows": {
+                "command": "./ci/windows/clean.bat"
+            },
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "go: build",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "./ci/linux/build.sh",
+            "windows": {
+                "command": "./ci/windows/build.bat"
+            },
+            "problemMatcher": [
+                "$go"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "go: run",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "./bin/fldrecall",
+            "windows": {
+                "command": ".\\bin\\fldrecall.exe"
+            },
+            "dependsOn": [
+                "go: build"
+            ],
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "go: test",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "./ci/linux/test.sh",
+            "windows": {
+                "command": "./ci/windows/test.bat"
+            },
+            "problemMatcher": [
+                "$go"
+            ],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "debug: reset sandbox",
+            "detail": "Refreshes .debug-sandbox/ from testdata/ so the launch.json debug configurations always start from a clean, known state.",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "./ci/linux/build-debug-sandbox.sh",
+            "windows": {
+                "command": "ci\\windows\\build-debug-sandbox.bat"
+            },
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        }
+    ]
+}

@@ -81,7 +81,7 @@ func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
 
 	// Resolve or insert the Snapshot ID
 	if copy.Id == -1 {
-		result, err := tx.Exec(`INSERT INTO snapshots (timestamp) VALUES (?)`, copy.TimeStamp)
+		result, err := tx.Exec(`INSERT INTO snapshots (timestamp) VALUES (?)`, copy.Timestamp)
 		if err != nil {
 			return fmt.Errorf("failed to insert snapshot: %w", err)
 		}
@@ -174,7 +174,7 @@ func LoadSnapshot(db *sql.DB, id int) (*Snapshot, error) {
 	// Fetch the main snapshot metadata
 	var snapshot Snapshot
 	querySnap := `SELECT id, timestamp FROM snapshots WHERE id = ?`
-	err := db.QueryRow(querySnap, id).Scan(&snapshot.Id, &snapshot.TimeStamp)
+	err := db.QueryRow(querySnap, id).Scan(&snapshot.Id, &snapshot.Timestamp)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("snapshot with id %d not found: %w)", id, err)

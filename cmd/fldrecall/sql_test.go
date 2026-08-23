@@ -53,7 +53,7 @@ func TestBasic(t *testing.T) {
 
 	// FindSnapshotId
 	{
-		existingId, err := FindSnapshotId(dbConn, snapshot.TimeStamp)
+		existingId, err := FindSnapshotId(dbConn, snapshot.Timestamp)
 		require.NoError(t, err)
 		require.NotEqual(t, InvalidId, existingId)
 	}
@@ -86,6 +86,6 @@ func TestBasic(t *testing.T) {
 
 		latestSnapshot, err := GetLatestSnapshot(dbConn)
 		require.NoError(t, err)
-		require.LessOrEqual(t, snapshot.TimeStamp, latestSnapshot.TimeStamp)
+		require.LessOrEqual(t, snapshot.Timestamp, latestSnapshot.Timestamp)
 	}
 }

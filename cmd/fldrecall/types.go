@@ -15,7 +15,7 @@ type Directory struct {
 
 type Snapshot struct {
 	Id          int
-	TimeStamp   time.Time
+	Timestamp   time.Time
 	Directories []Directory
 }
 

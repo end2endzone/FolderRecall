@@ -12,7 +12,7 @@ func CreateSnapshotNow() (Snapshot, error) {
 
 	snapshot := Snapshot{
 		Id:        InvalidId,
-		TimeStamp: now,
+		Timestamp: now,
 	}
 
 	// Create shell.application object

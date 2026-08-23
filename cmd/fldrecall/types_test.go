@@ -19,7 +19,7 @@ func TestSort(t *testing.T) {
 	now := time.Now().Round(0)
 	s := Snapshot{
 		Id:        InvalidId,
-		TimeStamp: now,
+		Timestamp: now,
 	}
 
 	s.AddDirectory("/tmp")
@@ -48,7 +48,7 @@ func TestUnique(t *testing.T) {
 	now := time.Now().Round(0)
 	s := Snapshot{
 		Id:        InvalidId,
-		TimeStamp: now,
+		Timestamp: now,
 	}
 
 	s.AddDirectory("/tmp")

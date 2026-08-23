@@ -9,3 +9,5 @@
   - navirecall
 - Convert powershell expression: $directories = @((New-Object -com shell.application).Windows()).Document.Folder.Self.Path
 - Define an icon for the executable
+- Rename `GetCurrentDirectoriesSnapshot()` to `CreateSnapshotNow()`.
+- Rename `ds` into `snapshot` in `ds := Snapshot{`, function GetCurrentDirectoriesSnapshot(). Same for `func (ds Snapshot) Sort()`.

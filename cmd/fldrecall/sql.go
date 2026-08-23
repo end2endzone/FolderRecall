@@ -69,7 +69,7 @@ func FindDirectoryId(db *sql.DB, path string) (int, error) {
 
 // SaveSnapshot saves a complete Snapshot struct (including its Directories) to the database.
 // Existing entries (snapshot or directories) are resolves and new entries are inserted into the database.
-func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
+func SaveSnapshot(db *sql.DB, snapshot *Snapshot) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin tx: %w", err)
@@ -77,7 +77,7 @@ func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
 	defer tx.Rollback()
 
 	// Create a copy of the snapshot which may get modified with new ids
-	copy := *originalSnapshot
+	copy := *snapshot
 
 	// Resolve or insert the Snapshot ID
 	if copy.Id == -1 {
@@ -149,8 +149,19 @@ func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
 	}
 
 	// Update the given snapshot
-	*originalSnapshot = copy
+	*snapshot = copy
 
+	return nil
+}
+
+// InsertSnapshots inserts multiple Snapshots in the database
+func InsertSnapshots(db *sql.DB, snapshots []*Snapshot) error {
+	for _, snapshot := range snapshots {
+		err := SaveSnapshot(db, snapshot)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -238,4 +249,55 @@ func GetLatestSnapshot(db *sql.DB) (*Snapshot, error) {
 
 	snapshot, err := LoadSnapshot(db, latestId)
 	return snapshot, err
+}
+
+// GetLastNSnapshotIds finds the Ids of the most recent snapshots in the database, limitting results to a maximum of `max` results.
+func GetLastNSnapshotIds(db *sql.DB, max int) ([]int, error) {
+	latestIds := []int{}
+
+	// Order by timestamp descending and limit to 1 to find the newest entry
+	query := `SELECT id FROM snapshots ORDER BY timestamp DESC LIMIT ?`
+	rows, err := db.Query(query, max)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		latestIds = append(latestIds, id)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return latestIds, nil
+}
+
+// GetLastNSnapshots finds the most recent snapshots in the database, limitting results to a maximum of `max` results.
+func GetLastNSnapshots(db *sql.DB, max int) ([]*Snapshot, error) {
+	latestIds, err := GetLastNSnapshotIds(db, max)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshots := []*Snapshot{}
+
+	for _, id := range latestIds {
+		snapshot, err := LoadSnapshot(db, id)
+		if err != nil {
+			return nil, err
+		}
+
+		snapshots = append(snapshots, snapshot)
+	}
+
+	return snapshots, nil
 }

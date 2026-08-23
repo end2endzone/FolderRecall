@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	ole "github.com/go-ole/go-ole"
 	"github.com/stretchr/testify/require"
@@ -10,13 +11,82 @@ import (
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
 
+// GenerateMockSnapshots creates 10 mock snapshot structures with mixed data.
+func GenerateMockSnapshots() []*Snapshot {
+	// Pre-define a pool of sample directory paths
+	dirPool := []string{
+		"/dev",
+		"/etc/nginx",
+		"/home/user/docs",
+		"/home/user/downloads",
+		"/opt/app",
+		"/tmp",
+		"/usr/bin",
+		"/var/log",
+		"/var/www/html",
+	}
+
+	snapshots := make([]*Snapshot, 10)
+
+	// Base starting time: 4 days ago at 09:00 AM
+	baseTime := time.Now().AddDate(0, 0, -4).Truncate(time.Hour)
+	baseTime = time.Date(baseTime.Year(), baseTime.Month(), baseTime.Day(), 9, 0, 0, 0, baseTime.Location())
+
+	// Define specific combinations of indexes from our dirPool for each of the 10 snapshots
+	combinations := [][]int{
+		{0, 1, 2},    // Use directories 0, 1 and 3
+		{1, 3},       // Use directories 1 and 3
+		{0, 2, 4, 5}, //
+		{2, 5, 6},    //
+		{1, 4, 7},    //
+		{0, 3, 6},    //
+		{4, 8},       //
+		{2, 3, 7},    //
+		{0, 1, 5, 8}, //
+		{1, 6, 7},    //
+	}
+
+	// Time offsets to simulate multiple days and different times of day
+	// (e.g., increments of several hours to spread across a 3-day window)
+	timeOffsets := []time.Duration{
+		0 * time.Hour,  // Day 1, 09:00 AM
+		4 * time.Hour,  // Day 1, 01:00 PM
+		9 * time.Hour,  // Day 1, 06:00 PM
+		22 * time.Hour, // Day 2, 07:00 AM
+		27 * time.Hour, // Day 2, 12:00 PM
+		33 * time.Hour, // Day 2, 06:00 PM
+		48 * time.Hour, // Day 3, 09:00 AM
+		52 * time.Hour, // Day 3, 01:00 PM
+		58 * time.Hour, // Day 3, 07:00 PM
+		72 * time.Hour, // Day 4, 09:00 AM
+	}
+
+	for i := 0; i < 10; i++ {
+		// Populate metadata
+		snapshots[i] = &Snapshot{
+			Id:        -1,
+			Timestamp: baseTime.Add(timeOffsets[i]),
+		}
+
+		// Map index combinations to concrete Directory structs
+		for _, dirIndex := range combinations[i] {
+			dir := Directory{
+				Id:   -1, // Set to -1 to force the DB lookup or unique insert
+				Path: dirPool[dirIndex],
+			}
+			snapshots[i].Directories = append(snapshots[i].Directories, dir)
+		}
+	}
+
+	return snapshots
+}
+
 func TestCreateTables(t *testing.T) {
 	var err error
 	dbConn, err = sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
-
 }
 
 func TestBasic(t *testing.T) {
@@ -88,4 +158,39 @@ func TestBasic(t *testing.T) {
 		require.NoError(t, err)
 		require.LessOrEqual(t, snapshot.Timestamp, latestSnapshot.Timestamp)
 	}
+}
+
+func TestGetLastNSnapshots(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockSnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+
+	// Ask too any snapshots
+	snapshots, err := GetLastNSnapshots(dbConn, 70)
+	require.NoError(t, err)
+	require.Len(t, snapshots, len(mockSnapshots)) // all snapshots are returned
+
+	// Ask for the last 7
+	snapshots, err = GetLastNSnapshots(dbConn, 7)
+	require.NoError(t, err)
+	require.Len(t, snapshots, 7)
 }

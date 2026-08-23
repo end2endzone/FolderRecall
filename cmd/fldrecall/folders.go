@@ -11,6 +11,7 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 	now := time.Now().Round(0)
 
 	ds := Snapshot{
+		Id:        InvalidId,
 		TimeStamp: now,
 	}
 
@@ -87,6 +88,13 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 		}
 		ds.Directories = append(ds.Directories, dir)
 	}
+
+	// Sort elements for pretty display
+	ds.Sort()
+
+	// Remove potential duplicates.
+	// The databse does not duplicate path.
+	ds.Unique()
 
 	return ds, nil
 }

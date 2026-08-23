@@ -38,7 +38,7 @@ func TestBasic(t *testing.T) {
 	})
 
 	t.Run("save snapshot", func(t *testing.T) {
-		snapshot, err := GetCurrentDirectoriesSnapshot()
+		snapshot, err := CreateSnapshotNow()
 		require.NoError(t, err)
 
 		err = SaveSnapshot(dbConn, &snapshot)

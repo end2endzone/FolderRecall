@@ -7,10 +7,10 @@ import (
 	"github.com/go-ole/go-ole/oleutil"
 )
 
-func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
+func CreateSnapshotNow() (Snapshot, error) {
 	now := time.Now().Round(0)
 
-	ds := Snapshot{
+	snapshot := Snapshot{
 		Id:        InvalidId,
 		TimeStamp: now,
 	}
@@ -18,20 +18,20 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 	// Create shell.application object
 	unknown, err := oleutil.CreateObject("Shell.Application")
 	if err != nil {
-		return ds, err
+		return snapshot, err
 	}
 	defer unknown.Release()
 
 	shell, err := unknown.QueryInterface(ole.IID_IDispatch)
 	if err != nil {
-		return ds, err
+		return snapshot, err
 	}
 	defer shell.Release()
 
 	// Call Windows() method
 	windows, err := oleutil.CallMethod(shell, "Windows")
 	if err != nil {
-		return ds, err
+		return snapshot, err
 	}
 	windowsDispatch := windows.ToIDispatch()
 	defer windowsDispatch.Release()
@@ -39,7 +39,7 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 	// Get Count of open windows
 	countVal, err := oleutil.GetProperty(windowsDispatch, "Count")
 	if err != nil {
-		return ds, err
+		return snapshot, err
 	}
 	count := int(countVal.Val)
 
@@ -86,15 +86,15 @@ func GetCurrentDirectoriesSnapshot() (Snapshot, error) {
 			Id:   InvalidId,
 			Path: path.ToString(),
 		}
-		ds.Directories = append(ds.Directories, dir)
+		snapshot.Directories = append(snapshot.Directories, dir)
 	}
 
 	// Sort elements for pretty display
-	ds.Sort()
+	snapshot.Sort()
 
 	// Remove potential duplicates.
 	// The databse does not duplicate path.
-	ds.Unique()
+	snapshot.Unique()
 
-	return ds, nil
+	return snapshot, nil
 }

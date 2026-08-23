@@ -347,7 +347,7 @@ func cmdMonitor(cfg Config) error {
 
 // cmdPrint get the current list of directories from File Explorer and print them on the console.
 func cmdPrint(cfg Config) error {
-	snapshot, err := GetCurrentDirectoriesSnapshot()
+	snapshot, err := CreateSnapshotNow()
 	if err != nil {
 		return err
 	}

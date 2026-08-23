@@ -43,10 +43,10 @@ func (s *Snapshot) HasDirectory(path string) bool {
 }
 
 // Sort sorts directory entries alphabetically
-func (ds Snapshot) Sort() {
-	sort.Slice(ds.Directories, func(i, j int) bool {
-		dir1 := ds.Directories[i].Path
-		dir2 := ds.Directories[j].Path
+func (s *Snapshot) Sort() {
+	sort.Slice(s.Directories, func(i, j int) bool {
+		dir1 := s.Directories[i].Path
+		dir2 := s.Directories[j].Path
 		return dir1 < dir2
 	})
 }

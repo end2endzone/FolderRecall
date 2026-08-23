@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
@@ -66,7 +67,8 @@ func FindDirectoryId(db *sql.DB, path string) (int, error) {
 	return id, nil
 }
 
-// SaveSnapshot saves the snapshot, resolves/inserts directories, and bridges them.
+// SaveSnapshot saves a complete Snapshot struct (including its Directories) to the database.
+// Existing entries (snapshot or directories) are resolves and new entries are inserted into the database.
 func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -150,4 +152,90 @@ func SaveSnapshot(db *sql.DB, originalSnapshot *Snapshot) error {
 	*originalSnapshot = copy
 
 	return nil
+}
+
+// FindSnapshotId searches for a snapshot by its exact timestamp.
+// Returns -1 and nil error if no snapshot matches the timestamp.
+func FindSnapshotId(db *sql.DB, timestampd time.Time) (int, error) {
+	var id int
+	query := `SELECT id FROM snapshots WHERE timestamp = ?`
+	err := db.QueryRow(query, timestampd).Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return -1, nil
+		}
+		return -1, err
+	}
+	return id, nil
+}
+
+// LoadSnapshot loads a complete Snapshot struct (including its Directories) using its ID.
+func LoadSnapshot(db *sql.DB, id int) (*Snapshot, error) {
+	// Fetch the main snapshot metadata
+	var snapshot Snapshot
+	querySnap := `SELECT id, timestamp FROM snapshots WHERE id = ?`
+	err := db.QueryRow(querySnap, id).Scan(&snapshot.Id, &snapshot.TimeStamp)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("snapshot with id %d not found: %w)", id, err)
+		}
+		return nil, err
+	}
+
+	// Fetch all directories associated with this snapshot via the junction table
+	queryDirs := `
+		SELECT d.id, d.path 
+		FROM directories d
+		JOIN snapshot_directories ON d.id = snapshot_directories.directory_id
+		WHERE snapshot_directories.snapshot_id = ?`
+
+	rows, err := db.Query(queryDirs, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dir Directory
+		err := rows.Scan(&dir.Id, &dir.Path)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Directories = append(snapshot.Directories, dir)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return &snapshot, nil
+}
+
+// GetLatestSnapshotId finds the Id of the most recent snapshot in the database.
+func GetLatestSnapshotId(db *sql.DB) (int, error) {
+	latestId := InvalidId
+
+	// Order by timestamp descending and limit to 1 to find the newest entry
+	query := `SELECT id FROM snapshots ORDER BY timestamp DESC LIMIT 1`
+	err := db.QueryRow(query).Scan(&latestId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return InvalidId, fmt.Errorf("no snapshots found in database")
+		}
+		return InvalidId, err
+	}
+
+	return latestId, nil
+}
+
+// GetLatestSnapshot finds the most recent snapshot in the database and loads it completely.
+func GetLatestSnapshot(db *sql.DB) (*Snapshot, error) {
+	latestId, err := GetLatestSnapshotId(db)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshot, err := LoadSnapshot(db, latestId)
+	return snapshot, err
 }

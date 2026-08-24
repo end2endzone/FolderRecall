@@ -303,6 +303,57 @@ func GetLastNSnapshots(db *sql.DB, max int) ([]*Snapshot, error) {
 	return snapshots, nil
 }
 
+// GetSnapshotIdsInInterval finds the Ids of the snapshots in the database that are between the given timestamps.
+func GetSnapshotIdsInInterval(db *sql.DB, start, end time.Time) ([]int, error) {
+	matchingIds := []int{}
+
+	// Order by timestamp descending and limit to 1 to find the newest entry
+	query := `SELECT id FROM snapshots WHERE timestamp BETWEEN ? AND ?`
+	rows, err := db.Query(query, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		matchingIds = append(matchingIds, id)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return matchingIds, nil
+}
+
+// GetSnapshotsInInterval finds the snapshots in the database that are between the given timestamps.
+func GetSnapshotsInInterval(db *sql.DB, start, end time.Time) ([]*Snapshot, error) {
+	matchingIds, err := GetSnapshotIdsInInterval(db, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshots := []*Snapshot{}
+
+	for _, id := range matchingIds {
+		snapshot, err := LoadSnapshot(db, id)
+		if err != nil {
+			return nil, err
+		}
+
+		snapshots = append(snapshots, snapshot)
+	}
+
+	return snapshots, nil
+}
+
 // DeleteSnapshotById removes a single snapshot. Foreign key cascading handles child directories.
 func DeleteSnapshotById(db *sql.DB, id int) error {
 	_, err := db.Exec(`DELETE FROM snapshots WHERE id = ?`, id)

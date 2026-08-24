@@ -279,3 +279,36 @@ func TestDeleteSnapshotsOlderThanDays(t *testing.T) {
 		require.Len(t, snapshots, 4)
 	}
 }
+
+func TestGetSnapshotsInInterval(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockSnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+
+	// GetSnapshotsInInterval()
+	{
+		// Delete snapshots [3, 6]
+		matches, err := GetSnapshotsInInterval(dbConn, mockSnapshots[3].Timestamp, mockSnapshots[6].Timestamp)
+		require.NoError(t, err)
+		require.Len(t, matches, 4)
+	}
+}

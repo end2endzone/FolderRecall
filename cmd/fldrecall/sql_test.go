@@ -194,3 +194,88 @@ func TestGetLastNSnapshots(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, snapshots, 7)
 }
+
+func TestDeleteSnapshotsFunctions(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockSnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+
+	// DeleteSnapshotsInInterval()
+	{
+		// Delete snapshots [7, 8], leaving 0, 1 and 9
+		err = DeleteSnapshotsInInterval(dbConn, mockSnapshots[2].Timestamp, mockSnapshots[8].Timestamp)
+		require.NoError(t, err)
+
+		// Get all remaining snapshots
+		snapshots, err := GetLastNSnapshots(dbConn, 999)
+		require.NoError(t, err)
+		require.Len(t, snapshots, 3)
+	}
+
+	// Delete snapshot 1, leaving 0 and 9
+	{
+		err = DeleteSnapshotById(dbConn, mockSnapshots[1].Id)
+		require.NoError(t, err)
+
+		// Get all remaining snapshots
+		snapshots, err := GetLastNSnapshots(dbConn, 999)
+		require.NoError(t, err)
+		require.Len(t, snapshots, 2)
+	}
+}
+
+func TestDeleteSnapshotsOlderThanDays(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockSnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+
+	// DeleteSnapshotsOlderThanDays()
+	{
+		// Delete snapshots [1, 6], leaving [7,10]
+		err = DeleteSnapshotsOlderThanDays(dbConn, 3)
+		require.NoError(t, err)
+
+		// Get all remaining snapshots
+		snapshots, err := GetLastNSnapshots(dbConn, 999)
+		require.NoError(t, err)
+		require.Len(t, snapshots, 4)
+	}
+}

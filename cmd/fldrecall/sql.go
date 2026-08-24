@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
@@ -300,4 +301,26 @@ func GetLastNSnapshots(db *sql.DB, max int) ([]*Snapshot, error) {
 	}
 
 	return snapshots, nil
+}
+
+// DeleteSnapshotById removes a single snapshot. Foreign key cascading handles child directories.
+func DeleteSnapshotById(db *sql.DB, id int) error {
+	_, err := db.Exec(`DELETE FROM snapshots WHERE id = ?`, id)
+	return err
+}
+
+// DeleteSnapshotsOlderThanDays removes snapshots older than N days.
+func DeleteSnapshotsOlderThanDays(db *sql.DB, days int) error {
+	// SQLite supports standard modifiers like '-N days'
+	query := `DELETE FROM snapshots WHERE timestamp < datetime('now', ?)`
+	modifier := "-" + strconv.Itoa(days) + " days" // e.g., "-30 days"
+
+	_, err := db.Exec(query, modifier)
+	return err
+}
+
+// DeleteSnapshotsInInterval removes all snapshots falling within the time window.
+func DeleteSnapshotsInInterval(db *sql.DB, start, end time.Time) error {
+	_, err := db.Exec(`DELETE FROM snapshots WHERE timestamp BETWEEN ? AND ?`, start, end)
+	return err
 }

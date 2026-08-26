@@ -269,14 +269,14 @@ func TestDeleteSnapshotsOlderThanDays(t *testing.T) {
 
 	// DeleteSnapshotsOlderThanDays()
 	{
-		// Delete snapshots [1, 6], leaving [7,10]
+		// Delete snapshots [1, 5], leaving [6,10]
 		err = DeleteSnapshotsOlderThanDays(dbConn, 3)
 		require.NoError(t, err)
 
 		// Get all remaining snapshots
 		snapshots, err := GetLastNSnapshots(dbConn, 999)
 		require.NoError(t, err)
-		require.Len(t, snapshots, 4)
+		require.Len(t, snapshots, 5)
 	}
 }
 

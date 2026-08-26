@@ -138,6 +138,21 @@
                 "--dbpath",
                 "${workspaceFolder}/.debug-sandbox/testdata/test-monitor.db"
             ]
+        },
+        {
+            "name": "fldrecall --export",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/fldrecall",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: reset sandbox",
+            "args": [
+                "--export",
+                "${workspaceFolder}/.debug-sandbox/testdata/mock-snapshots.exported.json",
+                "--dbpath",
+                "${workspaceFolder}/.debug-sandbox/testdata/mock-snapshots.db"
+            ]
         }
     ]
 }

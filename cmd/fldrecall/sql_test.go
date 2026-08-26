@@ -312,3 +312,35 @@ func TestGetSnapshotsInInterval(t *testing.T) {
 		require.Len(t, matches, 4)
 	}
 }
+
+func TestExportSnapshotsToJson(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockSnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+
+	// ExportSnapshotsToJson()
+	{
+		jsonFilePath := dbFilePath + ".json"
+		err := ExportSnapshotsToJson(dbConn, jsonFilePath)
+		require.NoError(t, err)
+	}
+}

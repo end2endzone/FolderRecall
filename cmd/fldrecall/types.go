@@ -9,14 +9,14 @@ import (
 const InvalidId = -1
 
 type Directory struct {
-	Id   int
-	Path string
+	Id   int    `json:"id"`
+	Path string `json:"path"`
 }
 
 type Snapshot struct {
-	Id          int
-	Timestamp   time.Time
-	Directories []Directory
+	Id          int         `json:"id"`
+	Timestamp   time.Time   `json:"timestamp"`
+	Directories []Directory `json:"directories"`
 }
 
 func (s *Snapshot) AddDirectory(path string) {

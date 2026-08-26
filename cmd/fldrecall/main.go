@@ -1,9 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/end2endzone/FolderRecall/internal/build"
@@ -13,6 +15,7 @@ import (
 
 // Config holds all the command-line argument values
 type Config struct {
+	CommandExport  string
 	CommandPrint   bool
 	CommandMonitor bool
 	DatabasePath   string
@@ -31,7 +34,7 @@ func main() {
 }
 
 func printHeader() {
-	fmt.Fprintf(os.Stdout, "fldrecall - Logs or recalls your Windows File Explorer navigation history.\n")
+	fmt.Fprintf(os.Stdout, "fldrecall - Snapshots or recalls your Windows File Explorer navigation history.\n")
 }
 
 func printVersion(verbose bool) {
@@ -78,9 +81,10 @@ func newAppFlagSet(cfg *Config) *flag.FlagSet {
 	fs := flag.NewFlagSet("fldrecall", flag.ContinueOnError)
 
 	// Bind string flags directly to the struct fields
+	fs.StringVar(&cfg.CommandExport, "export", "", "<path>|Export the nagivation history to a json file.\nDefaut's to %USERPROFILE%\\fldrecall.json")
 	fs.BoolVar(&cfg.CommandPrint, "print", false, "|Print the current list of directories in File Explorer.")
 	fs.BoolVar(&cfg.CommandMonitor, "monitor", false, "|Monitor and log navigation history.")
-	fs.StringVar(&cfg.DatabasePath, "dbpath", "", "<path>|Path to the database file to store navigation history.")
+	fs.StringVar(&cfg.DatabasePath, "dbpath", "", "<path>|Path to the database file to store navigation history.\nDefaut's to %USERPROFILE%\\fldrecall.db")
 	fs.IntVar(&cfg.Interval, "interval", InvalidInterval, "<value>|Interval time in seconds between snapshots.")
 	fs.BoolVar(&cfg.NoHeader, "no-header", false, "|Do not show product header when running a command.")
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "|Enable verbose output for the command.")
@@ -163,6 +167,7 @@ func printUsage(fs *flag.FlagSet) {
 
 	// Print static usage header
 	const usageText = `Usage:
+    fldrecall --export <path> [--no-header] [--verbose]
     fldrecall --print [--no-header] [--verbose]
     fldrecall --monitor [--no-header] --dbpath <path> [--no-header] [--verbose]
     fldrecall --version [--verbose]
@@ -234,6 +239,7 @@ func printUsage(fs *flag.FlagSet) {
 
 	// Print static examples
 	const exampleText = `Examples:
+	fldrecall --export %%USERPROFILE%%\fldrecall.json --dbpath %%USERPROFILE%%\fldrecall.db
 	fldrecall --print
 	fldrecall --monitor --dbpath %%USERPROFILE%%\fldrecall.db --interval 30
 	`
@@ -296,11 +302,19 @@ func run(args []string) int {
 	if cfg.Interval == InvalidInterval {
 		cfg.Interval = DefaultInterval
 	}
+	if cfg.DatabasePath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			reportArgumentParsingError("failed to get user's home directory: %v", err)
+			return 3
+		}
+		cfg.DatabasePath = filepath.Join(home, "fldrecall.db")
+	}
 
 	// Count how many commands are specified in the arguments
 	// Do not count `--version` and `--help` as these were already processed above.
 	commandsSet := 0
-	for _, set := range []bool{cfg.CommandMonitor, cfg.CommandPrint} {
+	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandPrint, cfg.CommandMonitor} {
 		if set {
 			commandsSet++
 		}
@@ -324,8 +338,18 @@ func run(args []string) int {
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
 
+	// If database is specified, try to connect to it.
+	dbConn, err = sql.Open("sqlite", cfg.DatabasePath)
+	if err != nil {
+		reportArgumentParsingError("failed to connect to database '%s' with error: %v", cfg.DatabasePath, err)
+		return 3
+	}
+	defer dbConn.Close()
+
 	// Call the actual command helpers
 	switch {
+	case cfg.CommandExport != "":
+		err = cmdExport(cfg)
 	case cfg.CommandPrint:
 		err = cmdPrint(cfg)
 	case cfg.CommandMonitor:
@@ -358,6 +382,21 @@ func cmdPrint(cfg Config) error {
 	fmt.Printf("Directories at %s : \n\n", snapshot.Timestamp)
 	for idx, dir := range snapshot.Directories {
 		fmt.Printf("%02d: %s\n", idx, dir.Path)
+	}
+
+	return nil
+}
+
+// cmdExport exports the current history to a json file.
+func cmdExport(cfg Config) error {
+	fmt.Printf("\n")
+	fmt.Printf("Exporting snapshots.\n")
+	fmt.Printf("  Database: %s\n", cfg.DatabasePath)
+	fmt.Printf("  File:     %s\n", cfg.CommandExport)
+
+	err := ExportSnapshotsToJson(dbConn, cfg.CommandExport)
+	if err != nil {
+		return err
 	}
 
 	return nil

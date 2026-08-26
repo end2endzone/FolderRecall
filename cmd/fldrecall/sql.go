@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -374,4 +376,77 @@ func DeleteSnapshotsOlderThanDays(db *sql.DB, days int) error {
 func DeleteSnapshotsInInterval(db *sql.DB, start, end time.Time) error {
 	_, err := db.Exec(`DELETE FROM snapshots WHERE timestamp BETWEEN ? AND ?`, start, end)
 	return err
+}
+
+// ExportSnapshotsToJson queries all snapshots and directories from SQLite and
+func ExportSnapshotsToJson(db *sql.DB, filePath string) error {
+	query := `
+		SELECT
+			s.id, s.timestamp,
+			d.id, d.path
+		FROM snapshots s
+		LEFT JOIN snapshot_directories sd ON s.id = sd.snapshot_id
+		LEFT JOIN directories d ON sd.directory_id = d.id
+		ORDER BY s.id ASC;
+		`
+	rows, err := db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	snapshotMap := make(map[int]*Snapshot)
+	var snapshotOrder []int
+
+	for rows.Next() {
+		var snapshotId int
+		var timestamp time.Time
+		var dirId sql.NullInt64    // using sql.Null* to support potential NULL values
+		var dirPath sql.NullString // using sql.Null* to support potential NULL values
+		err := rows.Scan(&snapshotId, &timestamp, &dirId, &dirPath)
+		if err != nil {
+			return err
+		}
+
+		// If snapshot is encountered for the first time, initialize it
+		snapshot, exists := snapshotMap[snapshotId]
+		if !exists {
+			// Create a new one
+			snapshot = &Snapshot{
+				Id:          snapshotId,
+				Timestamp:   timestamp,
+				Directories: []Directory{},
+			}
+			snapshotMap[snapshotId] = snapshot
+			snapshotOrder = append(snapshotOrder, snapshotId)
+		}
+
+		// Append directory if present (handles snapshots with no directories)
+		if dirId.Valid && dirPath.Valid {
+			snapshot.Directories = append(snapshot.Directories, Directory{
+				Id:   int(dirId.Int64),
+				Path: dirPath.String,
+			})
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return err
+	}
+
+	// Reconstruct ordered slice of snapshots
+	snapshots := make([]Snapshot, len(snapshotOrder))
+	for i, id := range snapshotOrder {
+		snapshots[i] = *snapshotMap[id]
+	}
+
+	// Marshal data into pretty-printed JSON
+	jsonData, err := json.MarshalIndent(snapshots, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	// Write JSON output to the specified file
+	return os.WriteFile(filePath, jsonData, 0644)
 }

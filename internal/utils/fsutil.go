@@ -24,7 +24,7 @@ func MoveDir(src string, dst string) error {
 		return err
 	}
 
-	err = copyDir(src, dst)
+	err = CopyDir(src, dst)
 	if err != nil {
 		return err
 	}

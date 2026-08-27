@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/end2endzone/FolderRecall/internal/build"
+	"github.com/end2endzone/FolderRecall/internal/spinner"
 	ole "github.com/go-ole/go-ole"
 	// ole2 "github.com/go-ole/go-ole/oleutil"
 )
@@ -247,6 +249,38 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintf(output, exampleText) //Bug: can not use fmt.Fprintln() without error: "fmt.Fprintln call has possible Printf formatting directive %U"
 }
 
+func demoSpinner() {
+	type State string
+
+	const (
+		StateWaiting    State = "WAITING"
+		StateProcessing State = "PROCESSING"
+		StateDone       State = "DONE"
+	)
+
+	currentState := StateWaiting
+	for currentState != StateDone {
+		switch currentState {
+		case StateWaiting:
+			spin := spinner.New("Waiting for data feed ")
+
+			// Define when the wait should end and run the animatio
+			endWait := time.Now().Add(3 * time.Second)
+			spin.AnimateUntil(80*time.Millisecond, endWait)
+
+			fmt.Println("✔ Data feed received!")
+
+			currentState = StateProcessing
+		case StateProcessing:
+			fmt.Println("-> Processing records...")
+			time.Sleep(1 * time.Second)
+			fmt.Println("-> Processing complete.")
+			currentState = StateDone
+		}
+	}
+
+}
+
 func run(args []string) int {
 	var cfg Config
 	fs := newAppFlagSet(&cfg)
@@ -271,6 +305,8 @@ func run(args []string) int {
 	}
 
 	var err error
+
+	demoSpinner()
 
 	// Parse arguments
 	fs.SetOutput(os.Stderr) // parsing errors should be printed to stderr

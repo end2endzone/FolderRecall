@@ -1,0 +1,140 @@
+//go:build windows
+
+package spinner
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+// Global flag to track if font styling applied perfectly
+var SupportsUnicode = true
+
+// COORD defines the width and height of a font cell
+type COORD struct {
+	X int16
+	Y int16
+}
+
+type SMALL_RECT struct {
+	Left   int16
+	Top    int16
+	Right  int16
+	Bottom int16
+}
+
+type CONSOLE_SCREEN_BUFFER_INFO struct {
+	DwSize              COORD
+	DwCursorPosition    COORD
+	WAttributes         uint16
+	SrWindow            SMALL_RECT
+	DwMaximumWindowSize COORD
+}
+
+// CONSOLE_FONT_INFOEX defines the layout expected by SetCurrentConsoleFontEx
+type CONSOLE_FONT_INFOEX struct {
+	CbSize     uint32
+	NFont      uint32
+	DwFontSize COORD
+	FontFamily uint32
+	FontWeight uint32
+	FaceName   [32]uint16 // UTF-16 string buffer for font name
+}
+
+// changeFont changes the font of the current windows console to Lucida Console which supports Braille characters.
+// Legacy Windows fonts like Consolas, Courier New, or Raster Fonts (the old defaults for CMD and basic PowerShell) do not contain the graphical glyphs
+// for Unicode Braille characters such as "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇".
+// When a font cannot find a character, it displays a ? or a empty rectangle.
+func changeFont(stdoutHandle uintptr, kernel32 *syscall.LazyDLL) {
+	setCurrentConsoleFontEx := kernel32.NewProc("SetCurrentConsoleFontEx")
+	getConsoleScreenBufferInfo := kernel32.NewProc("GetConsoleScreenBufferInfo")
+	setConsoleWindowInfo := kernel32.NewProc("SetConsoleWindowInfo")
+	if setCurrentConsoleFontEx.Find() != nil ||
+		getConsoleScreenBufferInfo.Find() != nil ||
+		setConsoleWindowInfo.Find() != nil {
+
+		SupportsUnicode = false
+		return
+	}
+
+	// Lucida Console is universally available on every Windows machine since 95
+	// and supports standard TrueType unicode sets much more reliably than MS Gothic in CMD
+	targetFont := "Lucida Console"
+	utf16Font, err := syscall.UTF16FromString(targetFont)
+	if err != nil || len(utf16Font) > 32 {
+		SupportsUnicode = false
+		return
+	}
+
+	// Construct the structure
+	var cfi CONSOLE_FONT_INFOEX
+	cfi.CbSize = uint32(unsafe.Sizeof(cfi))
+	cfi.NFont = 0
+	cfi.DwFontSize.X = 0  // 0 lets Windows dynamically scale the width automatically
+	cfi.DwFontSize.Y = 16 // Common font height (matches standard 16px terminal view)
+	cfi.FontFamily = 54   // FF_MODERN (Fixed-width/monospace spacing)
+	cfi.FontWeight = 400  // FW_NORMAL
+
+	// Copy the UTF-16 character bits into the array buffer
+	copy(cfi.FaceName[:], utf16Font)
+
+	// Apply Font
+	// Invoke the Win32 call (passing FALSE/0 means update the current active view)
+	ret, _, _ := setCurrentConsoleFontEx.Call(stdoutHandle, uintptr(0), uintptr(unsafe.Pointer(&cfi)))
+	if ret == 0 {
+		SupportsUnicode = false
+		return
+	}
+
+	// CRITICAL FIX: Force the console host window to re-draw its frame
+	// Without this, the terminal will keep rendering characters using the old font buffer cache
+	var csbi CONSOLE_SCREEN_BUFFER_INFO
+	retcsbi, _, _ := getConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))
+	if retcsbi != 0 && setConsoleWindowInfo.Find() == nil {
+		_, _, _ = setConsoleWindowInfo.Call(stdoutHandle, uintptr(1), uintptr(unsafe.Pointer(&csbi.SrWindow)))
+	}
+}
+
+func init() {
+	kernel32 := syscall.NewLazyDLL("kernel32.dll")
+
+	// 1. Force the console to use UTF-8 output code page (65001)
+	setConsoleOutputCP := kernel32.NewProc("SetConsoleOutputCP")
+	_, _, _ = setConsoleOutputCP.Call(uintptr(65001))
+
+	// 2. Enable Virtual Terminal Processing for ANSI/Cursor control codes (\r)
+	getStdHandle := kernel32.NewProc("GetStdHandle")
+	getConsoleMode := kernel32.NewProc("GetConsoleMode")
+	setConsoleMode := kernel32.NewProc("SetConsoleMode")
+
+	// STD_OUTPUT_HANDLE is defined as -11 (but Go does not allow unsigned 32 bits.)
+	// Use the literal unsigned 32-bit equivalent of -11 (4294967285)
+	// This satisfies the compiler completely without type overflow issues.
+	const stdOutputHandle uint32 = 4294967285
+	const enableVirtualTerminalProcessing = 0x0004
+
+	// FIX: Explicitly evaluate the numeric handle value 'ret'.
+	// Windows API returns 0 or InvalidHandle (-1) if it actually fails.
+	ret, _, _ := getStdHandle.Call(uintptr(stdOutputHandle))
+	if ret != 0 && ret != uintptr(syscall.InvalidHandle) {
+		var mode uint32
+
+		// Ignore error because a return value of != 0 dictates true success
+		retMode, _, _ := getConsoleMode.Call(ret, uintptr(unsafe.Pointer(&mode)))
+		if retMode != 0 {
+			mode |= enableVirtualTerminalProcessing
+
+			// Ignore error because a return value of != 0 dictates true success
+			retSetMode, _, _ := setConsoleMode.Call(ret, uintptr(mode))
+			if retSetMode == 0 {
+				SupportsUnicode = false
+			}
+		} else {
+			SupportsUnicode = false
+		}
+
+		changeFont(ret, kernel32)
+	} else {
+		SupportsUnicode = false
+	}
+}

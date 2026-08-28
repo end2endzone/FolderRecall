@@ -44,4 +44,28 @@ func TestFormatAge(t *testing.T) {
 		str := FormatAge(timestamp)
 		require.Equal(t, "3 days ago", str)
 	})
+
+	t.Run("exactly 7 days ago", func(t *testing.T) {
+		timestamp := time.Now().AddDate(0, 0, -7)
+		str := FormatAge(timestamp)
+		require.Equal(t, "1 week ago", str)
+	})
+
+	t.Run("less than 30 days ago", func(t *testing.T) {
+		timestamp := time.Now().AddDate(0, 0, -28)
+		str := FormatAge(timestamp)
+		require.Equal(t, "4 weeks ago", str)
+	})
+
+	t.Run("exactly 30 days ago", func(t *testing.T) {
+		timestamp := time.Now().AddDate(0, 0, -30)
+		str := FormatAge(timestamp)
+		require.Equal(t, "1 month ago", str)
+	})
+
+	t.Run("less than 12 months ago", func(t *testing.T) {
+		timestamp := time.Now().AddDate(0, 0, -5*31)
+		str := FormatAge(timestamp)
+		require.Equal(t, "5 months ago", str)
+	})
 }

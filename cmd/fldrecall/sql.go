@@ -306,7 +306,7 @@ func GetLastNSnapshots(db *sql.DB, max int) ([]*Snapshot, error) {
 }
 
 // GetSnapshotIdsInInterval finds the Ids of the snapshots in the database that are between the given timestamps.
-func GetSnapshotIdsInInterval(db *sql.DB, start, end time.Time) ([]int, error) {
+func GetSnapshotIdsInInterval(db *sql.DB, start time.Time, end time.Time) ([]int, error) {
 	matchingIds := []int{}
 
 	// Order by timestamp descending and limit to 1 to find the newest entry
@@ -336,7 +336,7 @@ func GetSnapshotIdsInInterval(db *sql.DB, start, end time.Time) ([]int, error) {
 }
 
 // GetSnapshotsInInterval finds the snapshots in the database that are between the given timestamps.
-func GetSnapshotsInInterval(db *sql.DB, start, end time.Time) ([]*Snapshot, error) {
+func GetSnapshotsInInterval(db *sql.DB, start time.Time, end time.Time) ([]*Snapshot, error) {
 	matchingIds, err := GetSnapshotIdsInInterval(db, start, end)
 	if err != nil {
 		return nil, err
@@ -354,6 +354,51 @@ func GetSnapshotsInInterval(db *sql.DB, start, end time.Time) ([]*Snapshot, erro
 	}
 
 	return snapshots, nil
+}
+
+// GetFirstSnapshotIdInInterval finds the Ids of the snapshots in the database that are between the given timestamps and return the first result.
+func GetFirstSnapshotIdInInterval(db *sql.DB, start time.Time, end time.Time) (int, error) {
+	matchingId := InvalidId
+
+	// Order by timestamp descending and limit to 1 to find the newest entry
+	query := `SELECT id FROM snapshots WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC LIMIT 1`
+	rows, err := db.Query(query, start, end)
+	if err != nil {
+		return InvalidId, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		err := rows.Scan(&id)
+		if err != nil {
+			return InvalidId, err
+		}
+
+		matchingId = id
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return InvalidId, err
+	}
+
+	return matchingId, nil
+}
+
+// GetFirstSnapshotsInInterval finds the snapshots in the database that are between the given timestamps and return the first result.
+func GetFirstSnapshotsInInterval(db *sql.DB, start time.Time, end time.Time) (*Snapshot, error) {
+	id, err := GetFirstSnapshotIdInInterval(db, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshot, err := LoadSnapshot(db, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return snapshot, nil
 }
 
 // DeleteSnapshotById removes a single snapshot. Foreign key cascading handles child directories.

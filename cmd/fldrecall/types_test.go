@@ -14,6 +14,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func makeSnapshot(dirs ...string) *Snapshot {
+	s := &Snapshot{
+		Id:        InvalidId,
+		Timestamp: time.Now().Round(0),
+	}
+
+	for _, path := range dirs {
+		s.AddDirectory(path)
+	}
+	return s
+}
+
 func ToStringSlice(s *Snapshot) []string {
 	var paths []string
 	for _, dir := range s.Directories {
@@ -227,4 +239,82 @@ func TestString(t *testing.T) {
 
 	// Assert offset is before directory count
 	require.Less(t, timeOffsetPos, directoryCountPos)
+}
+
+func TestCompareDirectories(t *testing.T) {
+	t.Run("same content", func(t *testing.T) {
+		s1 := makeSnapshot("/tmp", "/home", "/var", "/media", "/boot")
+		s2 := makeSnapshot("/tmp", "/home", "/var", "/media", "/boot")
+
+		expectedAdded := []string{}
+		expectedRemoved := []string{}
+
+		diff := s1.CompareDirectories(s2)
+
+		require.ElementsMatch(t, expectedAdded, diff.Added)
+		require.ElementsMatch(t, expectedRemoved, diff.Removed)
+	})
+
+	t.Run("added 1 dir", func(t *testing.T) {
+		s1 := makeSnapshot("/tmp", "/home", "/var", "/boot")
+		s2 := makeSnapshot("/tmp", "/home", "/var", "/media", "/boot") // media was added
+
+		expectedAdded := []string{"/media"}
+		expectedRemoved := []string{}
+
+		diff := s1.CompareDirectories(s2)
+
+		require.ElementsMatch(t, expectedAdded, diff.Added)
+		require.ElementsMatch(t, expectedRemoved, diff.Removed)
+	})
+
+	t.Run("removed 1 dir", func(t *testing.T) {
+		s1 := makeSnapshot("/tmp", "/home", "/var", "/media", "/boot")
+		s2 := makeSnapshot("/tmp", "/home", "/var", "/boot") // media was removed
+
+		expectedAdded := []string{}
+		expectedRemoved := []string{"/media"}
+
+		diff := s1.CompareDirectories(s2)
+
+		require.ElementsMatch(t, expectedAdded, diff.Added)
+		require.ElementsMatch(t, expectedRemoved, diff.Removed)
+	})
+
+	t.Run("mix", func(t *testing.T) {
+		s1 := makeSnapshot("/home", "/tmp", "/media")
+		s2 := makeSnapshot("/var", "/home", "/tmp", "/boot") // media was removed, /var was added, /boot was added
+
+		expectedAdded := []string{"/var", "/boot"}
+		expectedRemoved := []string{"/media"}
+
+		diff := s1.CompareDirectories(s2)
+
+		require.ElementsMatch(t, expectedAdded, diff.Added)
+		require.ElementsMatch(t, expectedRemoved, diff.Removed)
+	})
+}
+
+func TestSimplifySnapshotsByDirectory(t *testing.T) {
+	s0 := makeSnapshot()
+	s1 := makeSnapshot("/tmp", "/home")
+	s2 := makeSnapshot("/tmp", "/home")
+	s3 := makeSnapshot("/tmp", "/home")
+	s4 := makeSnapshot("/tmp", "/home")
+	s5 := makeSnapshot("/tmp")
+	s6 := makeSnapshot("/var", "/media", "/boot")
+	s7 := makeSnapshot("/var", "/media", "/boot")
+	s8 := makeSnapshot("/var", "/media", "/boot")
+	s9 := makeSnapshot("/var", "/media", "/boot")
+
+	snapshots := []*Snapshot{s0, s1, s2, s3, s4, s5, s6, s7, s8, s9}
+
+	simplified := SimplifySnapshotsByDirectory(snapshots)
+
+	require.Len(t, simplified, 4)
+
+	require.Equal(t, simplified[0], s0)
+	require.Equal(t, simplified[1], s4)
+	require.Equal(t, simplified[2], s5)
+	require.Equal(t, simplified[3], s9)
 }

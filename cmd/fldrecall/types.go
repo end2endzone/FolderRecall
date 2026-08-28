@@ -23,6 +23,12 @@ type Snapshot struct {
 	Directories []Directory `json:"directories"`
 }
 
+// DirectoryDiff holds the lists of added and removed directories resulting in comparing 2 snapshots.
+type DirectoryDiff struct {
+	Added   []string
+	Removed []string
+}
+
 func (s *Snapshot) AddDirectory(path string) {
 	dir := Directory{
 		Id:   InvalidId,
@@ -102,4 +108,112 @@ func (s *Snapshot) Unique() {
 		// Remove the element at 'idx' by splicing it out to preserve the order
 		s.Directories = append(s.Directories[:idx], s.Directories[idx+1:]...)
 	}
+}
+
+// HasDirectoryEquals checks if the directory list is equal to another snapshot's directory list.
+// Note: This checks for strict positional equality (order matters).
+// To compare using unordered lists, use CompareDirectories().
+func (s *Snapshot) HasDirectoryEquals(other *Snapshot) bool {
+	if len(s.Directories) != len(other.Directories) {
+		return false
+	}
+
+	for i := range s.Directories {
+		if s.Directories[i] != other.Directories[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Less reports whether the snapshot's timestamp is before another snapshot's timestamp.
+// Use for sorting slices of Snapshots.
+func (s *Snapshot) Less(other *Snapshot) bool {
+	return s.Timestamp.Before(other.Timestamp)
+}
+
+// Equals compares 2 snapshots to see if they are equals.
+func (s *Snapshot) Equals(other *Snapshot) bool {
+	if s.Timestamp != other.Timestamp {
+		return false
+	}
+
+	sameDirectories := s.HasDirectoryEquals(other)
+	return sameDirectories
+}
+
+// CompareDirectories compares the current snapshot against another snapshot, returning which directories were added or removed.
+// The current snapshot is treated as the base/older state and the other snapshot is treated as the newer state.
+func (s *Snapshot) CompareDirectories(other *Snapshot) DirectoryDiff {
+	// Move local/other directories to a map.
+	thisDirMap := make(map[string]struct{})
+	for _, dir := range s.Directories {
+		thisDirMap[dir.Path] = struct{}{}
+	}
+
+	otherDirMap := make(map[string]struct{})
+	for _, dir := range other.Directories {
+		otherDirMap[dir.Path] = struct{}{}
+	}
+
+	var added []string
+	var removed []string
+
+	// Find directories present in 'other' but not in 's' (Added)
+	for _, dir := range other.Directories {
+		_, exists := thisDirMap[dir.Path]
+		if !exists {
+			added = append(added, dir.Path)
+		}
+	}
+
+	// Find directories present in 's' but not in 'other' (Removed)
+	for _, dir := range s.Directories {
+		_, exists := otherDirMap[dir.Path]
+		if !exists {
+			removed = append(removed, dir.Path)
+		}
+	}
+
+	return DirectoryDiff{
+		Added:   added,
+		Removed: removed,
+	}
+}
+
+// SimplifySnapshotsByDirectory removes consecutive snapshots in a slice that are similar to the following one.
+// When multiple consecutive snapshots are similar, only the last one (bigger timestamp) is preserved.
+func SimplifySnapshotsByDirectory(snapshots []*Snapshot) []*Snapshot {
+	var lastMeaningfulSnapshot *Snapshot
+
+	meaningfulSnapshots := []*Snapshot{}
+
+	// Check each snapshots one by one to see if they are meaningful
+	for _, s := range snapshots {
+
+		// No existing meaningful snapshot yet
+		if lastMeaningfulSnapshot == nil || len(meaningfulSnapshots) == 0 {
+			// keep the first snapshot
+			lastMeaningfulSnapshot = s
+			meaningfulSnapshots = append(meaningfulSnapshots, s)
+			continue
+		}
+
+		// Is this snapshot different than the last one ?
+		diff := lastMeaningfulSnapshot.CompareDirectories(s)
+		if len(diff.Added) == 0 && len(diff.Removed) == 0 {
+			// This snapshot is identical to the last meaningful one (same directories / no changes.)
+			// It must replace the lastMeaningfulSnapshot
+			lastMeaningfulSnapshot = s
+			meaningfulSnapshots[len(meaningfulSnapshots)-1] = s
+			continue
+		}
+
+		// This one is meaningful
+		lastMeaningfulSnapshot = s
+		meaningfulSnapshots = append(meaningfulSnapshots, s)
+	}
+
+	return meaningfulSnapshots
 }

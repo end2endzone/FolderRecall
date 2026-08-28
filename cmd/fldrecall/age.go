@@ -8,12 +8,8 @@ import (
 
 // ElapsedTimeInDays returns the absolute number of calendar days between two times.
 func ElapsedTimeInDays(t1, t2 time.Time) float64 {
-	// Normalize both times to midnight UTC to strip time-of-day and DST impacts
-	d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC)
-	d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, time.UTC)
-
 	// Subtract the dates to get the duration
-	duration := d2.Sub(d1)
+	duration := t2.Sub(t1)
 
 	// Convert duration to hours, divide by 24, and take the absolute value
 	days := duration.Hours() / 24
@@ -35,11 +31,12 @@ func ElapsedTimeInMonths(t1, t2 time.Time) int {
 		early, late = late, early
 	}
 
-	// Calculate the base structural month difference
+	// Calculate the month difference without looking at the day
 	months := (late.Year()-early.Year())*12 + int(late.Month()-early.Month())
 
 	// If late's day of the month hasn't reached early's day, a full month hasn't passed.
-	// In other words, if we are the 25th, late must be set on the 25th or after in order to be a full month
+	// In other words, if we are the 25th, late must be set on the 25th or after in order to be a full month.
+	// If late is "the 12th next month", that is not a full month.
 	if late.Day() < early.Day() {
 		months--
 	}

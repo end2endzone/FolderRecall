@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// TimeDifferenceInDays returns the absolute number of calendar days between two times.
-func TimeDifferenceInDays(t1, t2 time.Time) float64 {
+// ElapsedTimeInDays returns the absolute number of calendar days between two times.
+func ElapsedTimeInDays(t1, t2 time.Time) float64 {
 	// Normalize both times to midnight UTC to strip time-of-day and DST impacts
 	d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC)
 	d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, time.UTC)
@@ -21,8 +21,8 @@ func TimeDifferenceInDays(t1, t2 time.Time) float64 {
 	return math.Abs(days)
 }
 
-// TimeDifferenceInMonths returns the absolute number of calendar months between two times.
-func TimeDifferenceInMonths(t1, t2 time.Time) int {
+// ElapsedTimeInMonths returns the absolute number of calendar months between two times.
+func ElapsedTimeInMonths(t1, t2 time.Time) int {
 	// Normalize both times to midnight UTC to strip time-of-day and DST impacts
 	// (We drop hours/minutes/seconds becuase we do not want to check if late's hours are >= to early's hours, same for minutes, same for seconds)
 	t1 = time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC)
@@ -62,8 +62,8 @@ func FormatAge(t time.Time) string {
 	hours := duration.Hours()
 
 	// Compute average days & month estimation
-	days := TimeDifferenceInDays(t, now)
-	months := TimeDifferenceInMonths(t, now)
+	days := ElapsedTimeInDays(t, now)
+	months := ElapsedTimeInMonths(t, now)
 	weeks := days / 7
 	years := months / 12
 

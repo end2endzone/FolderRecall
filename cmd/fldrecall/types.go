@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os/exec"
 	"slices"
 	"sort"
 	"time"
@@ -40,6 +42,28 @@ func (s *Snapshot) HasDirectory(path string) bool {
 		return false
 	}
 	return true
+}
+
+// String returns a string description for the current snapshot.
+func (s *Snapshot) String() string {
+	str := fmt.Sprintf("%s (%d directories)", s.Timestamp, len(s.Directories))
+	return str
+}
+
+// Restore restores a snapshot by opening File Explorer for each of the directories in the snapshot.
+func (s *Snapshot) Restore() error {
+	for _, dir := range s.Directories {
+		// Run the explorer command
+		cmd := exec.Command("explorer", dir.Path)
+
+		// cmd.Start() launches the explorer process asynchronously and returns immediately without waiting for the File Explorer window to close.
+		err := cmd.Start()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Sort sorts directory entries alphabetically

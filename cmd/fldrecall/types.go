@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/end2endzone/FolderRecall/internal/age"
 )
 
 const InvalidId = -1
@@ -46,7 +48,8 @@ func (s *Snapshot) HasDirectory(path string) bool {
 
 // String returns a string description for the current snapshot.
 func (s *Snapshot) String() string {
-	str := fmt.Sprintf("%s (%d directories)", s.Timestamp, len(s.Directories))
+	age := age.FormatAge(s.Timestamp)
+	str := fmt.Sprintf("%s (%s) with %d directories", s.Timestamp, age, len(s.Directories))
 	return str
 }
 

@@ -201,3 +201,30 @@ func TestRestore(t *testing.T) {
 	err = closeFileExplorerWindowForDirectory(path)
 	require.NoError(t, err)
 }
+
+func TestString(t *testing.T) {
+	s := Snapshot{
+		Id:        InvalidId,
+		Timestamp: time.Now().AddDate(0, 0, -3), // 3 days ago
+	}
+
+	s.AddDirectory("/tmp")
+	s.AddDirectory("/home")
+	s.AddDirectory("/var")
+	s.AddDirectory("/home")
+	s.AddDirectory("/media")
+	s.AddDirectory("/boot")
+
+	actual := s.String()
+
+	// Assert
+	timeOffsetPos := strings.Index(actual, "(3 days ago)")
+	directoryCountPos := strings.Index(actual, "6 directories")
+
+	// Assert both substrings were found
+	require.NotEqual(t, -1, timeOffsetPos)
+	require.NotEqual(t, -1, directoryCountPos)
+
+	// Assert offset is before directory count
+	require.Less(t, timeOffsetPos, directoryCountPos)
+}

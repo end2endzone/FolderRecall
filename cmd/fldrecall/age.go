@@ -18,7 +18,7 @@ func ElapsedTimeInDays(t1, t2 time.Time) float64 {
 }
 
 // ElapsedTimeInMonths returns the absolute number of calendar months between two times.
-func ElapsedTimeInMonths(t1, t2 time.Time) int {
+func ElapsedTimeInMonths(t1, t2 time.Time) float64 {
 	// Normalize both times to midnight UTC to strip time-of-day and DST impacts
 	// (We drop hours/minutes/seconds becuase we do not want to check if late's hours are >= to early's hours, same for minutes, same for seconds)
 	t1 = time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC)
@@ -41,7 +41,27 @@ func ElapsedTimeInMonths(t1, t2 time.Time) int {
 		months--
 	}
 
-	return months
+	// Compute the fractionnal part.
+
+	// Find the current anniversary date for the current number of month identified
+	elapsedMonthAnniversary := early.AddDate(0, months, 0)
+
+	// Find the next anniversary date (exactly 1 month after the current one)
+	nextMonthAnniversary := early.AddDate(0, months+1, 0)
+
+	// Calculate total days in this specific month-long window whcih spans [elapsedMonth, nextMonth]
+	totalDaysInMonthWindow := ElapsedTimeInDays(elapsedMonthAnniversary, nextMonthAnniversary)
+
+	// Calculate how many days have passed since the the elapsed months anniversary
+	daysElapsedInWindow := ElapsedTimeInDays(elapsedMonthAnniversary, late)
+
+	// Compute fraction
+	fractionalMonth := daysElapsedInWindow / totalDaysInMonthWindow
+
+	// Combine whole months with the precise fractional month
+	totalMonth := float64(months) + fractionalMonth
+
+	return totalMonth
 }
 
 // FormatAge calculates how old a given time is from "now" in a humain readable format.

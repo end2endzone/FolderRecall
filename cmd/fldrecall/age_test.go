@@ -85,3 +85,132 @@ func TestFormatAge(t *testing.T) {
 		require.Equal(t, "3 years ago", str)
 	})
 }
+
+func TestElapsedTimeInMonths(t *testing.T) {
+
+	t.Run("same day", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		t2 := t1
+
+		months := ElapsedTimeInMonths(t1, t2)
+		require.InDelta(t, 0.0, months, 0.0001)
+	})
+
+	t.Run("exactly 1 month", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		t2 := t1.AddDate(0, 1, 0)
+
+		months := ElapsedTimeInMonths(t1, t2)
+		require.InEpsilon(t, 1.0, months, 0.01)
+	})
+
+	t.Run("exactly n months", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		for i := 1; i < 15; i++ {
+			t2 := t1.AddDate(0, i, 0)
+
+			months := ElapsedTimeInMonths(t1, t2)
+			require.InEpsilon(t, float64(i), months, 0.01)
+		}
+	})
+
+	t.Run("exactly 1 month and 1 day", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		t2 := t1.AddDate(0, 1, 1)
+
+		months := ElapsedTimeInMonths(t1, t2)
+		require.Greater(t, months, 1.0)
+	})
+
+	t.Run("exactly close but not exactly 3 months (1 day less than 3 months)", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+		t2 := t1.AddDate(0, 3, -1) // expecting a little lower than 3.0
+
+		months := ElapsedTimeInMonths(t1, t2)
+		require.Less(t, months, 3.0)
+		require.InEpsilon(t, 2.9, months, 0.1)
+	})
+
+	t.Run("fractions", func(t *testing.T) {
+		// August 2026 is 31 days long.
+		// Each day should be 1/31 (0.032258064516129) month long
+		delta := 0.032258064516129
+
+		t1 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+		for days := 1; days < 30; days++ { // loop trhough all days of August 2026
+			t2 := t1.AddDate(0, 0, days)
+
+			months := ElapsedTimeInMonths(t1, t2)
+
+			expected := float64(days) * delta
+
+			require.InEpsilon(t, expected, months, 0.0001)
+		}
+	})
+
+	t.Run("swap/commutative/symmetric", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		t2 := t1.AddDate(0, 1, 0)
+
+		months1 := ElapsedTimeInMonths(t1, t2)
+		months2 := ElapsedTimeInMonths(t2, t1)
+		require.Equal(t, months1, months2)
+	})
+}
+
+func TestElapsedTimeInDays(t *testing.T) {
+	// Base time for calculations
+	baseTime := time.Date(2026, 1, 1, 12, 34, 56, 7890, time.UTC)
+
+	tests := []struct {
+		name     string
+		t1       time.Time
+		t2       time.Time
+		expected float64
+	}{
+		{
+			name:     "zero time difference",
+			t1:       baseTime,
+			t2:       baseTime,
+			expected: 0.0,
+		},
+		{
+			name:     "exactly one day later",
+			t1:       baseTime,
+			t2:       baseTime.Add(24 * time.Hour),
+			expected: 1.0,
+		},
+		{
+			name:     "exactly half a day later (fractional)",
+			t1:       baseTime,
+			t2:       baseTime.Add(12 * time.Hour),
+			expected: 0.5,
+		},
+		{
+			name:     "Granular precise duration (1 hour and 30 minutes)",
+			t1:       baseTime,
+			t2:       baseTime.Add(90 * time.Minute),
+			expected: 90.0 / (60 * 24.0), // 90 minutes of 24 hours
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := ElapsedTimeInDays(tt.t1, tt.t2)
+
+			// Use an epsilon delta of 1e-9 to handle underlying float64 rounding
+			epsilon := 1e-9
+			require.InDelta(t, tt.expected, actual, epsilon, "ElapsedTimeInDays(%v, %v) got unexpected result", tt.t1, tt.t2)
+		})
+	}
+
+	t.Run("swap/commutative/symmetric", func(t *testing.T) {
+		t1 := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)
+		t2 := t1.AddDate(0, 1, 0)
+
+		days1 := ElapsedTimeInDays(t1, t2)
+		days2 := ElapsedTimeInDays(t2, t1)
+		require.Equal(t, days1, days2)
+	})
+
+}

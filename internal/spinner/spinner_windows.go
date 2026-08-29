@@ -261,41 +261,6 @@ func EnableSegoeUISymbolFont() error {
 	return err
 }
 
-func ChangeFontUnreliable(stdoutHandle uintptr) error {
-	if SetCurrentConsoleFontEx.Find() != nil {
-		SupportsBrailleCharacters = false
-		return fmt.Errorf("function SetCurrentConsoleFontEx is not available")
-	}
-
-	targetFont := "Lucida Console"
-	utf16Font, err := syscall.UTF16FromString(targetFont)
-	if err != nil || len(utf16Font) > 32 {
-		return fmt.Errorf("failed to call UTF16FromString(): %w", err)
-	}
-
-	var cfi CONSOLE_FONT_INFOEX
-	cfi.CbSize = uint32(unsafe.Sizeof(cfi))
-	cfi.NFont = 0
-	cfi.FontSize.X = 0
-	cfi.FontSize.Y = 16
-	cfi.FontFamily = 54  // FF_MODERN
-	cfi.FontWeight = 400 // FW_NORMAL
-	copy(cfi.FaceName[:], utf16Font)
-
-	ret, _, _ := SetCurrentConsoleFontEx.Call(stdoutHandle, uintptr(0), uintptr(unsafe.Pointer(&cfi)))
-	if ret == 0 {
-		return fmt.Errorf("failed to call SetCurrentConsoleFontEx(): 0x%x", ret)
-	}
-
-	var csbi CONSOLE_SCREEN_BUFFER_INFO
-	retcsbi, _, _ := GetConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))
-	if retcsbi != 0 && SetConsoleWindowInfo.Find() == nil {
-		_, _, _ = SetConsoleWindowInfo.Call(stdoutHandle, uintptr(1), uintptr(unsafe.Pointer(&csbi.SrWindow)))
-	}
-
-	return nil
-}
-
 func openConsoleOutputHandle() (syscall.Handle, error) {
 	utf16Name, err := syscall.UTF16PtrFromString("CONOUT$")
 	if err != nil {

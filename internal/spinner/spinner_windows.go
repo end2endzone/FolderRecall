@@ -112,13 +112,16 @@ const (
 func init() {
 	SupportsBrailleCharacters = detectBrailleSupport()
 
+	// Force "Segoe UI Symbol" font to support Braille characters
 	if !SupportsBrailleCharacters {
 		fmt.Printf("Changing font to Segoe UI Symbol...\n")
 		size := COORD{X: 0, Y: 16}
 		err := ChangeConsoleFontWithSize("Segoe UI Symbol", &size)
-		if err == nil {
-			SupportsBrailleCharacters = true
+		if err != nil {
+			panic(err)
 		}
+
+		SupportsBrailleCharacters = true
 		fmt.Printf("Font is now 'Segoe UI Symbol' {%v,%v}\n", size.X, size.Y)
 	}
 

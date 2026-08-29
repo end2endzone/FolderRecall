@@ -67,10 +67,10 @@ func init() {
 		} else if magicNumber == 1 {
 			fmt.Printf("Changing to Segoe UI Symbol font...\n")
 
-			s1 := COORD{X: 9, Y: 12}
-			s2 := COORD{X: 8, Y: 12}
-			s3 := COORD{X: 7, Y: 12}
-			s4 := COORD{X: 6, Y: 14}
+			s1 := COORD{X: 0, Y: 12}
+			s2 := COORD{X: 0, Y: 14}
+			s3 := COORD{X: 0, Y: 16}
+			s4 := COORD{X: 0, Y: 18}
 			sizes := []COORD{s1, s2, s3, s4}
 			for _, size := range sizes {
 				err := ChangeConsoleFontWithSize("Segoe UI Symbol", &size)
@@ -172,6 +172,15 @@ const (
 	openExisting   = 3
 )
 
+func printConsoleFontIndex(cfi CONSOLE_FONT_INFOEX, prefix string) {
+	fmt.Printf("{\n")
+	fmt.Printf("  %sNFont=%v\n", prefix, cfi.NFont)
+	fmt.Printf("  %sFontSize={%v,%v}\n", prefix, cfi.FontSize.X, cfi.FontSize.Y)
+	fmt.Printf("  %sFontFamily=%v\n", prefix, cfi.FontFamily)
+	fmt.Printf("  %sFontWeight=%v\n", prefix, cfi.FontWeight)
+	fmt.Printf("}\n")
+}
+
 // ChangeConsoleFont changes the current console font.
 func ChangeConsoleFont(fontName string) error {
 	return ChangeConsoleFontWithSize(fontName, nil)
@@ -185,19 +194,32 @@ func ChangeConsoleFontWithSize(fontName string, fontSize *COORD) error {
 	}
 	defer syscall.CloseHandle(h)
 
-	var info CONSOLE_FONT_INFOEX
-	info.CbSize = uint32(unsafe.Sizeof(info))
+	var cfi CONSOLE_FONT_INFOEX
+	cfi.CbSize = uint32(unsafe.Sizeof(cfi))
 
-	ret, _, callErr := GetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	ret, _, err := GetCurrentConsoleFontEx.Call(
+		uintptr(h),
+		0, // FALSE (get current window size metrics)
+		uintptr(unsafe.Pointer(&cfi)))
 	if ret == 0 {
-		return callErr
+		return fmt.Errorf("failed to read console font: %v", err)
 	}
 
-	// fmt.Printf("before.nFont=%v\n", info.NFont)
-	// fmt.Printf("before.fontSize={%v,%v}\n", info.FontSize.X, info.FontSize.Y)
-	// fmt.Printf("before.fontFamily=%v\n", info.FontFamily)
-	// fmt.Printf("before.fontWeight=%v\n", info.FontWeight)
+	// Debug
+	// printConsoleFontIndex(cfi, "before.")
 
+	// Explicitly clear the layout index to force lookup by FaceName
+	cfi.NFont = 0
+
+	// Set X to 0 to prevent vector/raster aspect ratio warping.
+	// Windows automatically calculates the width matching the Y height.
+	cfi.FontSize.X = 0
+
+	// Force modern family and normal font style (no italic or bold)
+	cfi.FontFamily = 54  // FF_MODERN
+	cfi.FontWeight = 400 // FW_NORMAL
+
+	// Convert desired font (e.g., "Consolas") into a UTF-16 slice
 	utf16Font, err := syscall.UTF16FromString(fontName)
 	if err != nil {
 		return err
@@ -205,27 +227,44 @@ func ChangeConsoleFontWithSize(fontName string, fontSize *COORD) error {
 	if len(utf16Font) > 32 {
 		return fmt.Errorf("length of font name is more than 32 characters: %s", fontName)
 	}
-	copy(info.FaceName[:], utf16Font)
+
+	// Clean the font face string to prevent string truncation fallbacks.
+	// Reset array to zeros first
+	cfi.FaceName = [lfFaceSize]uint16{}
+	// Copy UTF-16 values into the fixed-size structure buffer
+	copy(cfi.FaceName[:], utf16Font)
 
 	// Force the size if specified
 	if fontSize != nil {
-		info.FontSize = *fontSize
+		cfi.FontSize = *fontSize
 	}
 
-	ret, _, callErr = SetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	// Debug
+	// printConsoleFontIndex(cfi, "patched.")
+
+	ret, _, err = SetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&cfi)))
 	if ret == 0 {
-		return callErr
+		return err
 	}
 
-	ret, _, callErr = GetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	ret, _, err = GetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&cfi)))
 	if ret == 0 {
-		return callErr
+		return err
 	}
 
-	// fmt.Printf("after.nFont=%v\n", info.NFont)
-	// fmt.Printf("after.fontSize={%v,%v}\n", info.FontSize.X, info.FontSize.Y)
-	// fmt.Printf("after.fontFamily=%v\n", info.FontFamily)
-	// fmt.Printf("after.fontWeight=%v\n", info.FontWeight)
+	// Debug
+	// printConsoleFontIndex(cfi, "after.")
+
+	/*var csbi CONSOLE_SCREEN_BUFFER_INFO
+	stdoutHandle := uintptr(h)
+	ret, _, err = GetConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))
+	if ret == 0 {
+		return err
+	}
+	ret, _, err = SetConsoleWindowInfo.Call(stdoutHandle, uintptr(1), uintptr(unsafe.Pointer(&csbi.SrWindow)))
+	if ret == 0 {
+		return err
+	}*/
 
 	return nil
 }
@@ -282,12 +321,12 @@ func ChangeFontUnreliable(stdoutHandle uintptr) error {
 }
 
 func openConsoleOutputHandle() (syscall.Handle, error) {
-	namePtr, err := syscall.UTF16PtrFromString("CONOUT$")
+	utf16Name, err := syscall.UTF16PtrFromString("CONOUT$")
 	if err != nil {
 		return 0, err
 	}
-	h, _, callErr := CreateFileW.Call(
-		uintptr(unsafe.Pointer(namePtr)),
+	h, _, err := CreateFileW.Call(
+		uintptr(unsafe.Pointer(utf16Name)),
 		uintptr(genericRead|genericWrite),
 		uintptr(fileShareRead|fileShareWrite),
 		0,
@@ -295,9 +334,10 @@ func openConsoleOutputHandle() (syscall.Handle, error) {
 		0,
 		0,
 	)
+
 	handle := syscall.Handle(h)
 	if handle == syscall.InvalidHandle {
-		return 0, callErr
+		return 0, err
 	}
 	return handle, nil
 }

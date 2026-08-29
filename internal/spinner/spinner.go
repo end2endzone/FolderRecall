@@ -8,6 +8,7 @@ package spinner
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,9 +56,32 @@ func (s *Spinner) Tick() {
 	s.index = (s.index + 1) % len(s.frames)
 }
 
-// Finish clears the spinner character.
+// eraseMessageAndLastFrame erases the spinner message and last frame.
+func (s *Spinner) EraseMessageAndLastFrame() {
+	// Compute a string to erase the spinner message
+	messageOverride := strings.Repeat(" ", len(s.message))
+
+	// Compute a string to erase the last spinner frame
+	longestFrameLength := 1
+	for _, frame := range s.frames {
+		if len(frame) > longestFrameLength {
+			longestFrameLength = len(frame)
+		}
+	}
+	frameOverride := strings.Repeat(" ", longestFrameLength)
+
+	fmt.Printf("\r%s%s", messageOverride, frameOverride)
+}
+
+// Finish clears the spinner character and ends the message with a dot.
 func (s *Spinner) Finish() {
-	fmt.Print("\r\n")
+	// Clear the previous message & frame since we will print a truncated version of "message".
+	s.EraseMessageAndLastFrame()
+
+	// Truncate the message. The message usually ends with a space or \t to create a space between the message and the spinner frame.
+	trimmedMessage := strings.TrimRight(s.message, " \t")
+	// Print the message wollowed by a dot (`.`) character.
+	fmt.Printf("\r%s.\n", trimmedMessage)
 }
 
 // AnimateUntil ticks and sleeps at the given speed in a loop until the endWait time

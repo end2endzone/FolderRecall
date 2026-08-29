@@ -125,6 +125,7 @@ func init() {
 		fmt.Printf("Font is now 'Segoe UI Symbol' {%v,%v}\n", size.X, size.Y)
 	}*/
 
+	// Enable UTF-8 supports for other characters such as `✔`.
 	enableUTF8ConsoleOutput()
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -42,65 +41,8 @@ import (
 // VSCode sets environment variable `TERM_PROGRAM=vscode` for its terminals instances.
 // This package uses this variable to detect VSCode and enable support.
 
-func boolToString(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
-func init() {
-	SupportsBrailleCharacters = detectBrailleSupport()
-
-	// Even if we do not supports Braille characters, try to enable Lucida Console font for other Unicode characters.
-	fmt.Printf("SupportsBrailleCharacters=%s (line 47)\n", boolToString(SupportsBrailleCharacters))
-
-	if !SupportsBrailleCharacters {
-		magicNumber := 1
-		if magicNumber == 0 {
-			fmt.Printf("Changing to Lucida Console font...\n")
-			err := EnableLucidaConsoleFont()
-			if err == nil {
-				SupportsBrailleCharacters = true
-			}
-			fmt.Printf("Text is 'Lucida Console' now. Is it working? : ⠋⠙⠹⠸⠼⠴⠦⠧⠇\n\n")
-		} else if magicNumber == 1 {
-			fmt.Printf("Changing to Segoe UI Symbol font...\n")
-
-			s1 := COORD{X: 0, Y: 12}
-			s2 := COORD{X: 0, Y: 14}
-			s3 := COORD{X: 0, Y: 16}
-			s4 := COORD{X: 0, Y: 18}
-			sizes := []COORD{s1, s2, s3, s4}
-			for _, size := range sizes {
-				err := ChangeConsoleFontWithSize("Segoe UI Symbol", &size)
-				if err == nil {
-					SupportsBrailleCharacters = true
-				}
-				fmt.Printf("Text is 'Segoe UI Symbol' {%v,%v} now. Is it working now? : ⠋⠙⠹⠸⠼⠴⠦⠧⠇\n\n", size.X, size.Y)
-				time.Sleep(time.Second * 3)
-			}
-		}
-
-	}
-
-	fmt.Printf("SupportsBrailleCharacters=%s (line 68)\n", boolToString(SupportsBrailleCharacters))
-
-	enableUTF8ConsoleOutput()
-}
-
-func detectBrailleSupport() bool {
-	if os.Getenv("WT_SESSION") != "" {
-		return true // Windows Terminal
-	}
-	if os.Getenv("TERM_PROGRAM") == "vscode" {
-		return true // VSCode
-	}
-	return false // plain conhost-hosted cmd.exe or powershell.exe
-}
-
 // -----------------------------------------------------------------------
-// UTF-8 output code page
+// WIN32 api functions
 // -----------------------------------------------------------------------
 
 var (
@@ -113,21 +55,12 @@ var (
 	SetConsoleWindowInfo       = kernel32.NewProc("SetConsoleWindowInfo")
 )
 
+// -----------------------------------------------------------------------
+// UTF-8 output code page
+// -----------------------------------------------------------------------
+
 // Cope page for UTF-8 in Windows
 const cpUTF8 = 65001
-
-// enableUTF8ConsoleOutput changes the console's code page to UTF-8 (65001).
-// This is worth doing even on consoles that fall back to ASCII spinner frames, because it also fixes any other Unicode chatacters.
-// For example, the "✔" character requires UTF-8 code page to be properly printed.
-//
-// This only changes the *encoding* used to interpret bytes written to the console.
-// It does not affect which glyphs the console's font can renders.
-func enableUTF8ConsoleOutput() {
-	if SetConsoleOutputCP.Find() != nil {
-		return // unavailable on this Windows version; ignore silently
-	}
-	_, _, _ = SetConsoleOutputCP.Call(uintptr(cpUTF8))
-}
 
 // -----------------------------------------------------------------------
 // Switching the console font
@@ -171,6 +104,49 @@ const (
 	fileShareWrite = 0x00000002
 	openExisting   = 3
 )
+
+// -----------------------------------------------------------------------
+// Package windows initialization
+// -----------------------------------------------------------------------
+
+func init() {
+	SupportsBrailleCharacters = detectBrailleSupport()
+
+	if !SupportsBrailleCharacters {
+		fmt.Printf("Changing font to Segoe UI Symbol...\n")
+		size := COORD{X: 0, Y: 16}
+		err := ChangeConsoleFontWithSize("Segoe UI Symbol", &size)
+		if err == nil {
+			SupportsBrailleCharacters = true
+		}
+		fmt.Printf("Font is now 'Segoe UI Symbol' {%v,%v}\n", size.X, size.Y)
+	}
+
+	enableUTF8ConsoleOutput()
+}
+
+func detectBrailleSupport() bool {
+	if os.Getenv("WT_SESSION") != "" {
+		return true // Windows Terminal
+	}
+	if os.Getenv("TERM_PROGRAM") == "vscode" {
+		return true // VSCode
+	}
+	return false // plain conhost-hosted cmd.exe or powershell.exe
+}
+
+// enableUTF8ConsoleOutput changes the console's code page to UTF-8 (65001).
+// This is worth doing even on consoles that fall back to ASCII spinner frames, because it also fixes any other Unicode chatacters.
+// For example, the "✔" character requires UTF-8 code page to be properly printed.
+//
+// This only changes the *encoding* used to interpret bytes written to the console.
+// It does not affect which glyphs the console's font can renders.
+func enableUTF8ConsoleOutput() {
+	if SetConsoleOutputCP.Find() != nil {
+		return // unavailable on this Windows version; ignore silently
+	}
+	_, _, _ = SetConsoleOutputCP.Call(uintptr(cpUTF8))
+}
 
 func printConsoleFontIndex(cfi CONSOLE_FONT_INFOEX, prefix string) {
 	fmt.Printf("{\n")

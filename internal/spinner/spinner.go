@@ -1,3 +1,9 @@
+// On platforms/terminals where Unicode Braille Pattern glyphs (U+2800-U+28FF)
+// are known to render correctly, the spinner uses the classic Braille
+// animation frames ("⠋⠙⠹⠸⠼⠴⠦⠧⠇"). Everywhere else it falls back to a plain
+// ASCII animation ("|/-\") that works on every terminal, including legacy
+// Windows consoles. See platform_windows.go and platform_other.go for how
+// that decision is made on each platform.
 package spinner
 
 import (
@@ -5,23 +11,36 @@ import (
 	"time"
 )
 
-// Spinner manages a single-threaded Unicode console spinner without text.
+// SupportsBrailleCharacters reports whether the current process's console is
+// expected to render Unicode Braille Pattern glyphs correctly. It is
+// determined once, at package init time, by platform-specific detection
+// logic (see platform_windows.go / platform_other.go). It is exported as a
+// variable rather than a function so callers can override the auto-detected
+// value if needed, e.g. to force ASCII frames:
+//
+//	spinner.SupportsBrailleCharacters = false
+var SupportsBrailleCharacters bool
+
+// brailleFrames are the classic Unicode Braille Pattern spinner frames.
+var brailleFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇"}
+
+// asciiFrames is the bulletproof fallback animation for terminals/fonts that
+// do not reliably render the Braille Patterns Unicode block.
+var asciiFrames = []string{"|", "/", "-", "\\"}
+
+// Spinner manages a single-threaded console spinner with an optional leading message.
 type Spinner struct {
 	frames  []string
 	index   int
 	message string
 }
 
-// New initializes a message-free spinner with Unicode Braille characters.
+// New creates a spinner that prefixes each animation frame with message.
+// The frame set (Braille or ASCII) is chosen based on SupportsBrailleCharacters at the time New is called.
 func New(message string) *Spinner {
-	var frames []string
-
+	frames := asciiFrames
 	if SupportsBrailleCharacters {
-		// Use premium Braille symbols if terminal supported it perfectly
-		frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇"}
-	} else {
-		// Bulletproof fallback: Will display perfectly on Windows system that do not supports UTF-8 Braille symbols
-		frames = []string{"|", "/", "-", "\\"}
+		frames = brailleFrames
 	}
 
 	return &Spinner{
@@ -41,7 +60,7 @@ func (s *Spinner) Finish() {
 	fmt.Print("\r\n")
 }
 
-// AnimateUntil loops, ticks, and sleeps at the given speed until the endWait t
+// AnimateUntil ticks and sleeps at the given speed in a loop until the endWait time
 // then automatically cleans up the line with Finish().
 func (s *Spinner) AnimateUntil(speed time.Duration, endWait time.Time) {
 	for time.Now().Before(endWait) {

@@ -3,11 +3,137 @@
 package spinner
 
 import (
+	"fmt"
+	"os"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
-var SupportsBrailleCharacters = true
+// -----------------------------------------------------------------------
+// Braille support detection
+// -----------------------------------------------------------------------
+//
+// Legacy Windows consoles (cmd.exe / powershell.exe hosted by conhost.exe) render text using GDI
+// with whatever TrueType font the console window is configured to use.
+//
+// On Windows 10 that font defaults to Consolas, which does not suppots glyphs for the Braille Patterns characters or Unicode characters.
+// Printing such characters typically show boxes or blank characters, even if the code page is set to UTF-8.
+// On consoles where Braille glyphs are unreliable we should fall back to the ASCII animation.
+// However, we can hope to get support by changing the user's console font with SetCurrentConsoleFontEx() which affects the current console window.
+// It does not always work. It is per Windows version, per font, per terminal.
+//
+// Some facts:
+// - Fonts 'Consolas' and 'Lucida Console' does not supports Braille or Unicode characters.
+// - Changing the font to 'Segoe UI Symbol' does supports Braille or Unicode characters,
+//   but it also actually changes the font to 'Raster Fonts' whcih do not renders properly.
+// - Font 'MS Gothic' does supports Braille or Unicode characters,
+//   but it renders backslash characters incorrectly as a Y with double-strikethrough.
+// - Fonts 'NSimSun', 'SimSun-ExtG' with a size of 18 does supports Braille or Unicode characters and seams appropriate,
+//   but they are likely not installed on all systems.
+//
+// Windows Terminal draws text with DirectWrite() and performs automatic per-glyph font fallback.
+// Braille characters render correctly regardless of the configured font.
+// Windows Terminal sets the environment variable `WT_SESSION`.
+// This package uses this variable to detect Windows Terminal and enable support.
+//
+// VSCode integrated terminal and its "JavaScript Debug Terminal" render through xterm.js inside a Chromium webview.
+// It does supports Braille characters properly regardless of font.
+// VSCode sets environment variable `TERM_PROGRAM=vscode` for its terminals instances.
+// This package uses this variable to detect VSCode and enable support.
+
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+func init() {
+	SupportsBrailleCharacters = detectBrailleSupport()
+
+	// Even if we do not supports Braille characters, try to enable Lucida Console font for other Unicode characters.
+	fmt.Printf("SupportsBrailleCharacters=%s (line 47)\n", boolToString(SupportsBrailleCharacters))
+
+	if !SupportsBrailleCharacters {
+		magicNumber := 1
+		if magicNumber == 0 {
+			fmt.Printf("Changing to Lucida Console font...\n")
+			err := EnableLucidaConsoleFont()
+			if err == nil {
+				SupportsBrailleCharacters = true
+			}
+			fmt.Printf("Text is 'Lucida Console' now. Is it working? : ⠋⠙⠹⠸⠼⠴⠦⠧⠇\n\n")
+		} else if magicNumber == 1 {
+			fmt.Printf("Changing to Segoe UI Symbol font...\n")
+
+			s1 := COORD{X: 9, Y: 12}
+			s2 := COORD{X: 8, Y: 12}
+			s3 := COORD{X: 7, Y: 12}
+			s4 := COORD{X: 6, Y: 14}
+			sizes := []COORD{s1, s2, s3, s4}
+			for _, size := range sizes {
+				err := ChangeConsoleFontWithSize("Segoe UI Symbol", &size)
+				if err == nil {
+					SupportsBrailleCharacters = true
+				}
+				fmt.Printf("Text is 'Segoe UI Symbol' {%v,%v} now. Is it working now? : ⠋⠙⠹⠸⠼⠴⠦⠧⠇\n\n", size.X, size.Y)
+				time.Sleep(time.Second * 3)
+			}
+		}
+
+	}
+
+	fmt.Printf("SupportsBrailleCharacters=%s (line 68)\n", boolToString(SupportsBrailleCharacters))
+
+	enableUTF8ConsoleOutput()
+}
+
+func detectBrailleSupport() bool {
+	if os.Getenv("WT_SESSION") != "" {
+		return true // Windows Terminal
+	}
+	if os.Getenv("TERM_PROGRAM") == "vscode" {
+		return true // VSCode
+	}
+	return false // plain conhost-hosted cmd.exe or powershell.exe
+}
+
+// -----------------------------------------------------------------------
+// UTF-8 output code page
+// -----------------------------------------------------------------------
+
+var (
+	kernel32                   = syscall.NewLazyDLL("kernel32.dll")
+	SetConsoleOutputCP         = kernel32.NewProc("SetConsoleOutputCP")
+	GetCurrentConsoleFontEx    = kernel32.NewProc("GetCurrentConsoleFontEx")
+	SetCurrentConsoleFontEx    = kernel32.NewProc("SetCurrentConsoleFontEx")
+	CreateFileW                = kernel32.NewProc("CreateFileW")
+	GetConsoleScreenBufferInfo = kernel32.NewProc("GetConsoleScreenBufferInfo")
+	SetConsoleWindowInfo       = kernel32.NewProc("SetConsoleWindowInfo")
+)
+
+// Cope page for UTF-8 in Windows
+const cpUTF8 = 65001
+
+// enableUTF8ConsoleOutput changes the console's code page to UTF-8 (65001).
+// This is worth doing even on consoles that fall back to ASCII spinner frames, because it also fixes any other Unicode chatacters.
+// For example, the "✔" character requires UTF-8 code page to be properly printed.
+//
+// This only changes the *encoding* used to interpret bytes written to the console.
+// It does not affect which glyphs the console's font can renders.
+func enableUTF8ConsoleOutput() {
+	if SetConsoleOutputCP.Find() != nil {
+		return // unavailable on this Windows version; ignore silently
+	}
+	_, _, _ = SetConsoleOutputCP.Call(uintptr(cpUTF8))
+}
+
+// -----------------------------------------------------------------------
+// Switching the console font
+// -----------------------------------------------------------------------
+
+const lfFaceSize = 32 // LF_FACESIZE
 
 type COORD struct {
 	X int16
@@ -31,107 +157,147 @@ type CONSOLE_SCREEN_BUFFER_INFO struct {
 
 type CONSOLE_FONT_INFOEX struct {
 	CbSize     uint32
-	NFont      uint32
-	DwFontSize COORD
-	FontFamily uint32
-	FontWeight uint32
-	FaceName   [32]uint16
+	NFont      uint32             // The index of the font in the system's console font table.
+	FontSize   COORD              // A COORD structure that contains the width and height of each character in the font, in logical units. The X member contains the width, while the Y member contains the height.
+	FontFamily uint32             // The font pitch and family. For information about the possible values for this member, see the description of the tmPitchAndFamily member of the TEXTMETRIC structure.
+	FontWeight uint32             // The font weight. The weight can range from 100 to 1000, in multiples of 100. For example, the normal weight is 400, while 700 is bold.
+	FaceName   [lfFaceSize]uint16 // The name of the typeface (such as Courier or Arial). Wide characters
 }
 
-func changeFont(stdoutHandle uintptr, kernel32 *syscall.LazyDLL) {
-	setCurrentConsoleFontEx := kernel32.NewProc("SetCurrentConsoleFontEx")
-	getConsoleScreenBufferInfo := kernel32.NewProc("GetConsoleScreenBufferInfo")
-	setConsoleWindowInfo := kernel32.NewProc("SetConsoleWindowInfo")
+const (
+	genericRead    = 0x80000000
+	genericWrite   = 0x40000000
+	fileShareRead  = 0x00000001
+	fileShareWrite = 0x00000002
+	openExisting   = 3
+)
 
-	if setCurrentConsoleFontEx.Find() != nil {
+// ChangeConsoleFont changes the current console font.
+func ChangeConsoleFont(fontName string) error {
+	return ChangeConsoleFontWithSize(fontName, nil)
+}
+
+// ChangeConsoleFontWithSize changes the current console font and font size, if specified.
+func ChangeConsoleFontWithSize(fontName string, fontSize *COORD) error {
+	h, err := openConsoleOutputHandle()
+	if err != nil {
+		return err
+	}
+	defer syscall.CloseHandle(h)
+
+	var info CONSOLE_FONT_INFOEX
+	info.CbSize = uint32(unsafe.Sizeof(info))
+
+	ret, _, callErr := GetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	if ret == 0 {
+		return callErr
+	}
+
+	// fmt.Printf("before.nFont=%v\n", info.NFont)
+	// fmt.Printf("before.fontSize={%v,%v}\n", info.FontSize.X, info.FontSize.Y)
+	// fmt.Printf("before.fontFamily=%v\n", info.FontFamily)
+	// fmt.Printf("before.fontWeight=%v\n", info.FontWeight)
+
+	utf16Font, err := syscall.UTF16FromString(fontName)
+	if err != nil {
+		return err
+	}
+	if len(utf16Font) > 32 {
+		return fmt.Errorf("length of font name is more than 32 characters: %s", fontName)
+	}
+	copy(info.FaceName[:], utf16Font)
+
+	// Force the size if specified
+	if fontSize != nil {
+		info.FontSize = *fontSize
+	}
+
+	ret, _, callErr = SetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	if ret == 0 {
+		return callErr
+	}
+
+	ret, _, callErr = GetCurrentConsoleFontEx.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&info)))
+	if ret == 0 {
+		return callErr
+	}
+
+	// fmt.Printf("after.nFont=%v\n", info.NFont)
+	// fmt.Printf("after.fontSize={%v,%v}\n", info.FontSize.X, info.FontSize.Y)
+	// fmt.Printf("after.fontFamily=%v\n", info.FontFamily)
+	// fmt.Printf("after.fontWeight=%v\n", info.FontWeight)
+
+	return nil
+}
+
+// EnableLucidaConsoleFont changes the current console font to "Lucida Console".
+// This font supports Braille Pattern glyph on legacy Windows 10 consoles.
+// Lucida Console ships with Windows by default.
+func EnableLucidaConsoleFont() error {
+	err := ChangeConsoleFont("Lucida Console")
+	return err
+}
+
+// EnableLucidaConsoleFont changes the current console font to "Lucida Console".
+// This fonc supports Braille Pattern glyph on legacy Windows 10 consoles according to Microsoft Word.
+// Segoe UI Symbol font is available with recent Windows 10 installations.
+func EnableSegoeUISymbolFont() error {
+	err := ChangeConsoleFont("Segoe UI Symbol")
+	return err
+}
+
+func ChangeFontUnreliable(stdoutHandle uintptr) error {
+	if SetCurrentConsoleFontEx.Find() != nil {
 		SupportsBrailleCharacters = false
-		return
+		return fmt.Errorf("function SetCurrentConsoleFontEx is not available")
 	}
 
 	targetFont := "Lucida Console"
 	utf16Font, err := syscall.UTF16FromString(targetFont)
 	if err != nil || len(utf16Font) > 32 {
-		SupportsBrailleCharacters = false
-		return
+		return fmt.Errorf("failed to call UTF16FromString(): %w", err)
 	}
 
 	var cfi CONSOLE_FONT_INFOEX
 	cfi.CbSize = uint32(unsafe.Sizeof(cfi))
 	cfi.NFont = 0
-	cfi.DwFontSize.X = 0
-	cfi.DwFontSize.Y = 16
+	cfi.FontSize.X = 0
+	cfi.FontSize.Y = 16
 	cfi.FontFamily = 54  // FF_MODERN
 	cfi.FontWeight = 400 // FW_NORMAL
 	copy(cfi.FaceName[:], utf16Font)
 
-	ret, _, _ := setCurrentConsoleFontEx.Call(stdoutHandle, uintptr(0), uintptr(unsafe.Pointer(&cfi)))
+	ret, _, _ := SetCurrentConsoleFontEx.Call(stdoutHandle, uintptr(0), uintptr(unsafe.Pointer(&cfi)))
 	if ret == 0 {
-		SupportsBrailleCharacters = false
-		return
+		return fmt.Errorf("failed to call SetCurrentConsoleFontEx(): 0x%x", ret)
 	}
 
 	var csbi CONSOLE_SCREEN_BUFFER_INFO
-	retcsbi, _, _ := getConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))
-	if retcsbi != 0 && setConsoleWindowInfo.Find() == nil {
-		_, _, _ = setConsoleWindowInfo.Call(stdoutHandle, uintptr(1), uintptr(unsafe.Pointer(&csbi.SrWindow)))
+	retcsbi, _, _ := GetConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))
+	if retcsbi != 0 && SetConsoleWindowInfo.Find() == nil {
+		_, _, _ = SetConsoleWindowInfo.Call(stdoutHandle, uintptr(1), uintptr(unsafe.Pointer(&csbi.SrWindow)))
 	}
+
+	return nil
 }
 
-func init() {
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-
-	// 1. Force the console to use UTF-8 output code page (65001)
-	setConsoleOutputCP := kernel32.NewProc("SetConsoleOutputCP")
-	_, _, _ = setConsoleOutputCP.Call(uintptr(65001))
-
-	createFile := kernel32.NewProc("CreateFileW")
-	getConsoleMode := kernel32.NewProc("GetConsoleMode")
-	setConsoleMode := kernel32.NewProc("SetConsoleMode")
-
-	const enableVirtualTerminalProcessing = 0x0004
-
-	// FIX: If standard GetStdHandle is wrapped inside a pipe stream,
-	// open "CONOUT$" directly to gain access to the raw Windows screen layout buffer.
-	conoutPath, _ := syscall.UTF16PtrFromString("CONOUT$")
-
-	// GENERIC_READ = 0x80000000, GENERIC_WRITE = 0x40000000
-	const genericReadWrite = 0x80000000 | 0x40000000
-	// FILE_SHARE_WRITE = 0x00000002
-	const fileShareWrite = 0x00000002
-	// OPEN_EXISTING = 3
-	const openExisting = 3
-
-	ret, _, _ := createFile.Call(
-		uintptr(unsafe.Pointer(conoutPath)),
-		uintptr(genericReadWrite),
-		uintptr(fileShareWrite),
+func openConsoleOutputHandle() (syscall.Handle, error) {
+	namePtr, err := syscall.UTF16PtrFromString("CONOUT$")
+	if err != nil {
+		return 0, err
+	}
+	h, _, callErr := CreateFileW.Call(
+		uintptr(unsafe.Pointer(namePtr)),
+		uintptr(genericRead|genericWrite),
+		uintptr(fileShareRead|fileShareWrite),
 		0,
 		uintptr(openExisting),
 		0,
 		0,
 	)
-
-	if ret != 0 && ret != uintptr(syscall.InvalidHandle) {
-		var mode uint32
-
-		retMode, _, _ := getConsoleMode.Call(ret, uintptr(unsafe.Pointer(&mode)))
-		if retMode != 0 {
-			mode |= enableVirtualTerminalProcessing
-
-			retSetMode, _, _ := setConsoleMode.Call(ret, uintptr(mode))
-			if retSetMode == 0 {
-				SupportsBrailleCharacters = false
-			}
-		} else {
-			SupportsBrailleCharacters = false
-		}
-
-		changeFont(ret, kernel32)
-
-		// Clean up our targeted window handle
-		closeHandle := kernel32.NewProc("CloseHandle")
-		_, _, _ = closeHandle.Call(ret)
-	} else {
-		SupportsBrailleCharacters = false
+	handle := syscall.Handle(h)
+	if handle == syscall.InvalidHandle {
+		return 0, callErr
 	}
+	return handle, nil
 }

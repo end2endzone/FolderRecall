@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"runtime"
 	"testing"
 	"time"
 
@@ -98,6 +99,10 @@ func TestBasic(t *testing.T) {
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
 
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Initialize COM library
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
@@ -169,6 +174,10 @@ func TestGetLastNSnapshots(t *testing.T) {
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
 
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Initialize COM library
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
@@ -203,6 +212,10 @@ func TestDeleteSnapshotsFunctions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
+
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	// Initialize COM library
 	ole.CoInitialize(0)
@@ -252,6 +265,10 @@ func TestDeleteSnapshotsOlderThanDays(t *testing.T) {
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
 
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Initialize COM library
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
@@ -289,6 +306,10 @@ func TestGetSnapshotsInInterval(t *testing.T) {
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
 
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Initialize COM library
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
@@ -321,6 +342,10 @@ func TestExportSnapshotsToJson(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, dbConn)
 	defer dbConn.Close()
+
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	// Initialize COM library
 	ole.CoInitialize(0)

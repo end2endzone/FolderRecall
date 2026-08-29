@@ -234,6 +234,8 @@ func ChangeConsoleFontWithSize(fontName string, fontSize *COORD) error {
 	// Debug
 	// printConsoleFontIndex(cfi, "after.")
 
+	// Force the console host window to re-draw its frame.
+	// Without this, the terminal will keep rendering characters using the old font buffer cache
 	/*var csbi CONSOLE_SCREEN_BUFFER_INFO
 	stdoutHandle := uintptr(h)
 	ret, _, err = GetConsoleScreenBufferInfo.Call(stdoutHandle, uintptr(unsafe.Pointer(&csbi)))

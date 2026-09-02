@@ -9,6 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${fileDirname}"
         },
         {
@@ -16,6 +17,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -26,6 +28,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -37,6 +40,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -49,6 +53,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -60,6 +65,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -71,6 +77,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -82,6 +89,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -93,6 +101,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "debug: reset sandbox",
@@ -105,6 +114,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "debug: reset sandbox",
@@ -117,6 +127,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "args": [
@@ -128,6 +139,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "debug: reset sandbox",
@@ -144,6 +156,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "console": "integratedTerminal",
             "program": "${workspaceFolder}/cmd/fldrecall",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "debug: reset sandbox",

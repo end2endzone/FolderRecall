@@ -306,8 +306,6 @@ func run(args []string) int {
 
 	var err error
 
-	demoSpinner()
-
 	// Parse arguments
 	fs.SetOutput(os.Stderr) // parsing errors should be printed to stderr
 	err = fs.Parse(args)

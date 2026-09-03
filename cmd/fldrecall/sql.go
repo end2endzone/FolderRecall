@@ -600,3 +600,38 @@ func ExportSnapshotsToJson(db *sql.DB, filePath string) error {
 	// Write JSON output to the specified file
 	return os.WriteFile(filePath, jsonData, 0644)
 }
+
+func tableExistsSQLite(db *sql.DB, tableName string) (bool, error) {
+	var name string
+	query := `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`
+
+	err := db.QueryRow(query, tableName).Scan(&name)
+	if err == sql.ErrNoRows {
+		return false, nil // Table explicitly does not exist
+	}
+	if err != nil {
+		return false, err // An actual database error occurred
+	}
+	return true, nil
+}
+
+func HasTables(db *sql.DB) (bool, error) {
+	var exists bool
+	var err error
+
+	names := []string{"snapshots", "directories", "snapshot_directories"}
+	for _, name := range names {
+
+		exists, err = tableExistsSQLite(db, name)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			return false, nil
+		}
+
+	}
+
+	// all mandatory table exists
+	return true, nil
+}

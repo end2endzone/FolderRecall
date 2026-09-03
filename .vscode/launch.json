@@ -146,7 +146,7 @@
             "args": [
                 "--monitor",
                 "--interval",
-                "--30",
+                "30",
                 "--dbpath",
                 "${workspaceFolder}/.debug-sandbox/testdata/test-monitor.db"
             ]

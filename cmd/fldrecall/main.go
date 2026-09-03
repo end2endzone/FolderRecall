@@ -7,11 +7,14 @@ package main
 //go:generate goversioninfo versioninfo.json
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -255,38 +258,6 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintf(output, exampleText) //Bug: can not use fmt.Fprintln() without error: "fmt.Fprintln call has possible Printf formatting directive %U"
 }
 
-func demoSpinner() {
-	type State string
-
-	const (
-		StateWaiting    State = "WAITING"
-		StateProcessing State = "PROCESSING"
-		StateDone       State = "DONE"
-	)
-
-	currentState := StateWaiting
-	for currentState != StateDone {
-		switch currentState {
-		case StateWaiting:
-			spin := spinner.New("Waiting for data feed ")
-
-			// Define when the wait should end and run the animatio
-			endWait := time.Now().Add(3 * time.Second)
-			spin.AnimateUntil(80*time.Millisecond, endWait)
-
-			fmt.Println("✔ Data feed received!")
-
-			currentState = StateProcessing
-		case StateProcessing:
-			fmt.Println("-> Processing records...")
-			time.Sleep(1 * time.Second)
-			fmt.Println("-> Processing complete.")
-			currentState = StateDone
-		}
-	}
-
-}
-
 func run(args []string) int {
 	var cfg Config
 	fs := newAppFlagSet(&cfg)
@@ -374,6 +345,10 @@ func run(args []string) int {
 		return 2
 	}
 
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Initialize COM library
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
@@ -386,6 +361,22 @@ func run(args []string) int {
 	}
 	defer dbConn.Close()
 
+	// Do we need to create the tables ?
+	exists, err := HasTables(dbConn)
+	if err != nil {
+		reportArgumentParsingError("failed to detect existing tables in database '%s' with error: %v", cfg.DatabasePath, err)
+		return 4
+	}
+	if !exists {
+		// They do not exists, create them
+		fmt.Printf("Creating tables in database...\n")
+		err = CreateTables(dbConn)
+		if err != nil {
+			reportArgumentParsingError("failed to create tables in database '%s' with error: %v", cfg.DatabasePath, err)
+			return 5
+		}
+	}
+
 	// Call the actual command helpers
 	switch {
 	case cfg.CommandExport != "":
@@ -393,7 +384,7 @@ func run(args []string) int {
 	case cfg.CommandPrint:
 		err = cmdPrint(cfg)
 	case cfg.CommandMonitor:
-		err = cmdMonitor(cfg)
+		err = cmdMonitor(dbConn, cfg)
 	}
 
 	// Check for an error while running a command.
@@ -405,8 +396,63 @@ func run(args []string) int {
 }
 
 // cmdMonitor monitors the navigation history at the given interval and store it in the database.
-func cmdMonitor(cfg Config) error {
-	return nil
+func cmdMonitor(db *sql.DB, cfg Config) error {
+	type State string
+
+	const (
+		StateWaiting    State = "WAITING"
+		StateProcessing State = "PROCESSING"
+		StateDone       State = "DONE"
+	)
+
+	// Create a context that listens for Ctrl+C (os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop() // Clean up resources when main exits
+
+	// Loop indefinitely until we press CTRL+C
+	state := StateWaiting
+	for state != StateDone {
+		switch state {
+		case StateWaiting:
+			spin := spinner.New("Waiting for next snapshot ")
+
+			// Define when the wait should end and run the animatio
+			endWait := time.Now().Add(time.Duration(cfg.Interval) * time.Second)
+			spin.AnimateUntilWithContext(ctx, 80*time.Millisecond, endWait)
+
+			// Did we triggered the context ?
+			if ctx.Err() != nil {
+				fmt.Printf("Interrupted!\n")
+
+				// Next state
+				state = StateDone
+				break
+			}
+
+			// Next state
+			state = StateProcessing
+		case StateProcessing:
+			//fmt.Printf("Taking snapshot!\n")
+
+			// Take & save a snapshot
+			snapshot, err := CreateSnapshotNow()
+			if err != nil {
+				return err
+			}
+			err = SaveSnapshot(db, &snapshot)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("%s.\n", snapshot.String())
+
+			// Next state
+			state = StateWaiting
+		}
+	}
+
+	err := ctx.Err()
+	return err
 }
 
 // cmdPrint get the current list of directories from File Explorer and print them on the console.

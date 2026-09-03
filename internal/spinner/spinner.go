@@ -7,6 +7,7 @@
 package spinner
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -84,12 +85,27 @@ func (s *Spinner) Finish() {
 	fmt.Printf("\r%s.\n", trimmedMessage)
 }
 
-// AnimateUntil ticks and sleeps at the given speed in a loop until the endWait time
+// AnimateUntilWithContext ticks and sleeps at the given speed in a loop until the endWait time
 // then automatically cleans up the line with Finish().
-func (s *Spinner) AnimateUntil(speed time.Duration, endWait time.Time) {
+// Interrupting the context force the function to exit immediately.
+func (s *Spinner) AnimateUntilWithContext(ctx context.Context, speed time.Duration, endWait time.Time) {
 	for time.Now().Before(endWait) {
 		s.Tick()
-		time.Sleep(speed)
+
+		// Sleep for speed duration and listen for early cancellation with CTRL+C
+		select {
+		case <-ctx.Done():
+			s.Finish()
+			return // Exit immediately if Ctrl+C or cancellation occurs
+		case <-time.After(speed):
+			// Finished sleeping for this tick, continue the loop
+		}
 	}
 	s.Finish()
+}
+
+// AnimateUntilWithContext ticks and sleeps at the given speed in a loop until the endWait time
+// then automatically cleans up the line with Finish().
+func (s *Spinner) AnimateUntil(speed time.Duration, endWait time.Time) {
+	s.AnimateUntilWithContext(context.Background(), speed, endWait)
 }

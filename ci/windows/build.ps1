@@ -35,12 +35,22 @@ $env:CGO_ENABLED = "0"
 # Point this to the exact package path where your main function lives
 $Pkg = "main"
 
+# Read current version
+$Version = Get-Content -Path "VERSION" -Raw
+
 Write-Host "Generating..."
-go generate ./cmd/fldrecall
+# Run generators recursively across your entire project
+go generate ./...
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to run go generators: exit code $LASTEXITCODE"
+}
 
 Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."
 # Run build from the root, pointing to the main package directory
 go build -o $Target ./cmd/fldrecall
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to build go code: exit code $LASTEXITCODE"
+}
 
 Write-Host "Build complete!"
 Write-Host

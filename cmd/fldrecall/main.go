@@ -1,10 +1,10 @@
 package main
 
 // Generate [ProjectRoot]/versioninfo.json from the template and inject content of `[ProjectRoot]/VERSION` file.
-//go:generate go run ../../prebuild.go --input=../../versioninfo-template.json --output=../../versioninfo.json
+//go:generate go run ../../prebuild.go --input=../../versioninfo-template.json --output=versioninfo.json
 
 // Generate resource.syso which inject VersionInfo & app icon into the executable.
-//go:generate goversioninfo ../../versioninfo.json
+//go:generate goversioninfo versioninfo.json
 
 import (
 	"database/sql"

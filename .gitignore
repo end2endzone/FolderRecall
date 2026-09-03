@@ -30,9 +30,9 @@ badge.json
 # Windows folder icon
 desktop.ini
 
-# Resources and temporary files
+# Temporary files & resources
 cmd/fldrecall/resource.syso
+cmd/fldrecall/versioninfo.json
 resources/icon16.png
 resources/icon32.png
 resources/icon64.png
-versioninfo.json

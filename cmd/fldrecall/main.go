@@ -375,6 +375,15 @@ func run(args []string) int {
 			reportArgumentParsingError("failed to create tables in database '%s' with error: %v", cfg.DatabasePath, err)
 			return 5
 		}
+	} else {
+		// Existing tables in this database
+		latestId, err := GetLatestSnapshotId(dbConn)
+		if err == nil && latestId != InvalidId {
+			snapshot, err := LoadSnapshot(dbConn, latestId)
+			if err == nil {
+				fmt.Printf("Latest snapshot is %s\n", snapshot.String())
+			}
+		}
 	}
 
 	// Call the actual command helpers
@@ -432,7 +441,7 @@ func cmdMonitor(db *sql.DB, cfg Config) error {
 			// Next state
 			state = StateProcessing
 		case StateProcessing:
-			//fmt.Printf("Taking snapshot!\n")
+			fmt.Printf("Snapshot: ")
 
 			// Take & save a snapshot
 			snapshot, err := CreateSnapshotNow()
@@ -444,7 +453,13 @@ func cmdMonitor(db *sql.DB, cfg Config) error {
 				return err
 			}
 
-			fmt.Printf("%s.\n", snapshot.String())
+			// Remove " (just now)" from snapshot description.
+			// Since all snapshots were taken "just now", there is no point in printing this value.
+			desc := snapshot.String()
+			desc = strings.ReplaceAll(desc, " (just now)", "")
+
+			// Print snapshot description
+			fmt.Printf("%s.\n", desc)
 
 			// Next state
 			state = StateWaiting

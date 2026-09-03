@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,9 @@ import (
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
+
+//go:embed schema.sql
+var databaseSchema string
 
 // Global or package-level DB reference for the requested helper function
 var dbConn *sql.DB
@@ -22,6 +26,7 @@ func CreateTables(db *sql.DB) error {
 		return err
 	}
 
+	// Get all Create() statements as a string slice
 	queries := []string{
 		// Snapshots Table
 		`CREATE TABLE IF NOT EXISTS snapshots (
@@ -399,6 +404,106 @@ func GetFirstSnapshotsInInterval(db *sql.DB, start time.Time, end time.Time) (*S
 	}
 
 	return snapshot, nil
+}
+
+// GetSnapshotsCount queries the database and returns the total number of snapshots.
+func GetSnapshotsCount(db *sql.DB) (int, error) {
+	var count int
+
+	// Using a regular COUNT query since id is the Primary Key
+	query := `SELECT COUNT(id) as count FROM snapshots`
+
+	// QueryRow is ideal here because we only expect a single row with a single column
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count snapshots: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetSnapshotRecallCandidates finds the snapshots in the database that are good recall candidates.
+func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
+
+	candidates := &Candidates{
+		daily:  []*Snapshot{},
+		hourly: []*Snapshot{},
+		latest: []*Snapshot{},
+	}
+
+	now := time.Now().Round(0)
+
+	// append the first snapshots of the last 5 days
+	for i := 5; i >= 1; i-- {
+		starTime := now.AddDate(0, 0, -i)
+		endTime := starTime.AddDate(0, 0, 1).Add(-1 * time.Hour) // minus 1 hour to not also include the same snapshot of next hour band
+
+		id, err := GetFirstSnapshotIdInInterval(db, starTime, endTime)
+		if err != nil {
+			return nil, err
+		}
+
+		// If there is no result
+		if id == InvalidId {
+			continue
+		}
+
+		snapshot, err := LoadSnapshot(db, id)
+		if err != nil {
+			return nil, err
+		}
+
+		candidates.daily = append(candidates.daily, snapshot)
+	}
+
+	// append the first snapshots of the last 24 hours
+	for i := 24; i >= 1; i-- {
+		starTime := now.Add(time.Duration(-i) * time.Hour)
+		endTime := starTime.Add(1 * time.Hour).Add(-1 * time.Minute) // minus 1 minute to not also include the same snapshot of next hour band
+
+		id, err := GetFirstSnapshotIdInInterval(db, starTime, endTime)
+		if err != nil {
+			return nil, err
+		}
+
+		// If there is no result
+		if id == InvalidId {
+			continue
+		}
+
+		snapshot, err := LoadSnapshot(db, id)
+		if err != nil {
+			return nil, err
+		}
+
+		candidates.hourly = append(candidates.hourly, snapshot)
+	}
+
+	// append the lastest 10 snapshots
+	latest, err := GetLastNSnapshotIds(db, 10)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range latest {
+		// If there is no result
+		if id == InvalidId {
+			continue
+		}
+
+		snapshot, err := LoadSnapshot(db, id)
+		if err != nil {
+			return nil, err
+		}
+
+		candidates.latest = append(candidates.latest, snapshot)
+	}
+
+	// Simplify each categories
+	candidates.daily = SimplifySnapshotsByDirectory(candidates.daily)
+	candidates.hourly = SimplifySnapshotsByDirectory(candidates.hourly)
+	candidates.latest = SimplifySnapshotsByDirectory(candidates.latest)
+
+	return candidates, nil
 }
 
 // DeleteSnapshotById removes a single snapshot. Foreign key cascading handles child directories.

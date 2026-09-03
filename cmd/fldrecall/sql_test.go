@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"math/rand"
 	"runtime"
 	"testing"
 	"time"
@@ -80,6 +82,160 @@ func GenerateMockSnapshots() []*Snapshot {
 	}
 
 	return snapshots
+}
+
+// GenerateMockFullHistorySnapshots creates a full 7-day realistic history of snapshots with mixed data.
+func GenerateMockFullHistorySnapshots() []*Snapshot {
+	// Diversified directory pools grouped by context
+	baseDirs := []string{
+		"/home/user/downloads",
+		"/home/user/desktop",
+		"/home/user/documents/receipts",
+		"/home/user/pictures/screenshots",
+	}
+
+	projects := [][]string{
+		// Microservices API
+		{
+			"/home/user/src/api-gateway",
+			"/home/user/src/api-gateway/internal/router",
+			"/home/user/src/api-gateway/configs/prod",
+		},
+
+		// Corporate Website Project
+		{
+			"/home/user/src/corporate-web",
+			"/home/user/src/corporate-web/components/ui",
+			"/home/user/src/corporate-web/public/assets",
+			"/home/user/src/corporate-web/pages/api",
+		},
+
+		// Personal Tech Blog (Markdown & Static Hugo site generator)
+		{
+			"/home/user/personal/blog",
+			"/home/user/personal/blog/content/posts",
+			"/home/user/personal/blog/themes/minimal",
+		},
+
+		// Infrastructure as Code
+		{
+			"/home/user/src/infra-terraform",
+			"/home/user/src/infra-terraform/environments/dev",
+			"/home/user/src/infra-terraform/modules/vpc",
+		},
+	}
+
+	systemDirs := []string{
+		"/var/log/nginx",
+		"/tmp/build-cache",
+		"/etc/docker",
+		"/home/user/.config/nvim",
+		"/etc/hosts",
+	}
+
+	var snapshots []*Snapshot
+	rng := rand.New(rand.NewSource(42)) // Use a custom Seed to get a pseudo-random generation but still deterministic
+
+	// Start history exactly 7 days ago
+	//baseTime := time.Now().Add(time.Duration(-7*24) * time.Hour)
+	baseTime := time.Now().Round(0).AddDate(0, 0, -7)
+
+	// Establish an initial fallback state before the loop starts
+	currentActive := []string{"/home/user/src/corporate-web", "/home/user/downloads"}
+
+	// Loop through every single day of the week
+	for day := 0; day < 7; day++ {
+
+		// Iterate over 24 hours in 5-minute steps (Continuous timeline)
+		for hour := 0; hour < 24; hour++ {
+
+			for minute := 0; minute < 60; minute += 5 {
+				snapshotTime := baseTime.
+					AddDate(0, 0, day).
+					Add(time.Duration(hour) * time.Hour).
+					Add(time.Duration(minute) * time.Minute)
+
+				weekday := snapshotTime.Weekday()
+				isWeekend := weekday == time.Saturday || weekday == time.Sunday
+				isWorkingHours := snapshotTime.Hour() >= 9 && snapshotTime.Hour() < 18
+
+				// Only change state if it's a weekday during [9 AM, 6 PM[
+				if !isWeekend && isWorkingHours {
+					if hour == 9 && minute == 0 {
+						// Morning routine: Shift focus to a new project for the day
+						activeProject := projects[rng.Intn(len(projects))]
+						currentActive = []string{baseDirs[rng.Intn(len(baseDirs))], activeProject[0]}
+					} else {
+						// Create micro-adjustments during the workday
+						activeProject := projects[rng.Intn(len(projects))] // Can pivot or stay
+						currentActive = evolveDirectories(currentActive, baseDirs, activeProject, systemDirs, rng)
+					}
+				}
+
+				// If it is night or weekend, currentActive remains exactly as it was last set creating identical (repeating) snapshot entries.
+
+				//snapshotTime := time.Date(
+				//	dayTime.Year(), dayTime.Month(), dayTime.Day(),
+				//	hour, minute, 0, 0, dayTime.Location(),
+				//)
+
+				// Map the currentActive string slice to Directory structs
+				var dirs []Directory
+				for _, p := range currentActive {
+					dirs = append(dirs, Directory{Id: InvalidId, Path: p})
+				}
+
+				// Create a snapshot
+				snapshots = append(snapshots, &Snapshot{
+					Id:          InvalidId,
+					Timestamp:   snapshotTime,
+					Directories: dirs,
+				})
+			}
+		}
+	}
+
+	return snapshots
+}
+
+// evolveDirectories applies realistic micro-changes to open windows
+func evolveDirectories(current []string, base, proj, sys []string, rng *rand.Rand) []string {
+	dirMap := make(map[string]struct{})
+	for _, p := range current {
+		dirMap[p] = struct{}{}
+	}
+
+	// 85% chance the user stays focused on current directories (no change)
+	if rng.Float64() < 0.85 {
+		return current
+	}
+
+	// 10% chance to open something new
+	if rng.Float64() < 0.70 && len(dirMap) < 6 {
+		roll := rng.Float64()
+		if roll < 0.50 {
+			dirMap[proj[rng.Intn(len(proj))]] = struct{}{} // Drill deeper into active context
+		} else if roll < 0.80 {
+			dirMap[base[rng.Intn(len(base))]] = struct{}{} // Open a utility folder
+		} else {
+			dirMap[sys[rng.Intn(len(sys))]] = struct{}{} // Check system/editor configuration
+		}
+	}
+
+	// 5% chance to close a directory window (keep at least 1 open)
+	if rng.Float64() < 0.30 && len(dirMap) > 1 {
+		keys := make([]string, 0, len(dirMap))
+		for k := range dirMap {
+			keys = append(keys, k)
+		}
+		delete(dirMap, keys[rng.Intn(len(keys))])
+	}
+
+	result := make([]string, 0, len(dirMap))
+	for k := range dirMap {
+		result = append(result, k)
+	}
+	return result
 }
 
 func TestCreateTables(t *testing.T) {
@@ -367,5 +523,69 @@ func TestExportSnapshotsToJson(t *testing.T) {
 		jsonFilePath := dbFilePath + ".json"
 		err := ExportSnapshotsToJson(dbConn, jsonFilePath)
 		require.NoError(t, err)
+	}
+}
+
+func TestGetSnapshotRecallCandidates(t *testing.T) {
+	dbFilePath := createTempDatabaseFileName(t)
+
+	var err error
+	dbConn, err = sql.Open("sqlite", dbFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+	defer dbConn.Close()
+
+	//Lock this goroutine to the current OS thread so that COM initializations (which are thread-bound) do not change.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Initialize COM library
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	// CreateTables
+	{
+		err = CreateTables(dbConn)
+		require.NoError(t, err)
+	}
+
+	// Create mock snapshots
+	mockSnapshots := GenerateMockFullHistorySnapshots()
+	err = InsertSnapshots(dbConn, mockSnapshots)
+	require.NoError(t, err)
+	count, err := GetSnapshotsCount(dbConn)
+	require.Equal(t, len(mockSnapshots), count)
+
+	// GetSnapshotRecallCandidates()
+	{
+		candidates, err := GetSnapshotRecallCandidates(dbConn)
+		require.NoError(t, err)
+		require.NotNil(t, candidates)
+
+		debug := true
+		if debug {
+			jsonFilePath := dbFilePath + ".json"
+			err := ExportSnapshotsToJson(dbConn, jsonFilePath)
+			require.NoError(t, err)
+			fmt.Printf("Snapshots exported to file '%s'\n", jsonFilePath)
+
+			fmt.Printf("Daily snapshots:\n")
+			for i, snapshot := range candidates.daily {
+				fmt.Printf("%2d: %s\n", i, snapshot.String())
+			}
+			fmt.Printf("\n")
+
+			fmt.Printf("Hourly snapshots:\n")
+			for i, snapshot := range candidates.hourly {
+				fmt.Printf("%2d: %s\n", i, snapshot.String())
+			}
+			fmt.Printf("\n")
+
+			fmt.Printf("Latest snapshots:\n")
+			for i, snapshot := range candidates.latest {
+				fmt.Printf("%2d: %s\n", i, snapshot.String())
+			}
+			fmt.Printf("\n")
+		}
 	}
 }

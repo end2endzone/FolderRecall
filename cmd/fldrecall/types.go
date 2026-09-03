@@ -23,6 +23,12 @@ type Snapshot struct {
 	Directories []Directory `json:"directories"`
 }
 
+type Candidates struct {
+	daily  []*Snapshot
+	hourly []*Snapshot
+	latest []*Snapshot
+}
+
 // DirectoryDiff holds the lists of added and removed directories resulting in comparing 2 snapshots.
 type DirectoryDiff struct {
 	Added   []string

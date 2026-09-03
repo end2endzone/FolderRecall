@@ -362,7 +362,7 @@ func run(args []string) int {
 	defer dbConn.Close()
 
 	// Do we need to create the tables ?
-	exists, err := HasTables(dbConn)
+	exists, err := AllTablesExists(dbConn)
 	if err != nil {
 		reportArgumentParsingError("failed to detect existing tables in database '%s' with error: %v", cfg.DatabasePath, err)
 		return 4

@@ -601,7 +601,7 @@ func ExportSnapshotsToJson(db *sql.DB, filePath string) error {
 	return os.WriteFile(filePath, jsonData, 0644)
 }
 
-func tableExistsSQLite(db *sql.DB, tableName string) (bool, error) {
+func TableExists(db *sql.DB, tableName string) (bool, error) {
 	var name string
 	query := `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`
 
@@ -615,14 +615,14 @@ func tableExistsSQLite(db *sql.DB, tableName string) (bool, error) {
 	return true, nil
 }
 
-func HasTables(db *sql.DB) (bool, error) {
+func AllTablesExists(db *sql.DB) (bool, error) {
 	var exists bool
 	var err error
 
 	names := []string{"snapshots", "directories", "snapshot_directories"}
 	for _, name := range names {
 
-		exists, err = tableExistsSQLite(db, name)
+		exists, err = TableExists(db, name)
 		if err != nil {
 			return false, err
 		}

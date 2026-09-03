@@ -35,8 +35,10 @@ $env:CGO_ENABLED = "0"
 # Point this to the exact package path where your main function lives
 $Pkg = "main"
 
-Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."
+Write-Host "Generating..."
+go generate ./cmd/fldrecall
 
+Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."
 # Run build from the root, pointing to the main package directory
 go build -o $Target ./cmd/fldrecall
 

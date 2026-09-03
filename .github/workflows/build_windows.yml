@@ -69,6 +69,11 @@ jobs:
       shell: cmd
       run: go install gotest.tools/gotestsum@latest
 
+    - name: Install goversioninfo
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      shell: cmd
+      run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+
     - name: Build windows amd64
       env:
         GOOS: windows

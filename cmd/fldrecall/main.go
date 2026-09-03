@@ -1,5 +1,7 @@
 package main
 
+//go:generate goversioninfo ..\..\versioninfo.json
+
 import (
 	"database/sql"
 	"flag"

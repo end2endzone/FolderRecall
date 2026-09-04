@@ -26,7 +26,7 @@ if (-not [string]::IsNullOrEmpty($env:GOARCH)) {
 $Target="$ProjectRoot\bin\fldrecall.exe"
 if ($env:CI -eq "true") {
     $Target="$ProjectRoot\bin\fldrecall-$env:GOOS-$env:GOARCH.exe"
-    echo "Building on CI/CD server. Changing the target file name to '$Target'"
+    Write-Host "Building on CI/CD server. Changing the target file name to '$Target'"
 }
 
 # Ensures your binary does not depend on host operating system C libraries, making the binary completely portable.
@@ -39,10 +39,24 @@ $Pkg = "main"
 $Version = Get-Content -Path "VERSION" -Raw
 
 Write-Host "Generating..."
-# Run generators recursively across your entire project
-go generate ./...
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to run go generators: exit code $LASTEXITCODE"
+# Run generators recursively across your entire project.
+# Generators must running in the local CPU architecture disregarding what ever GOARCH is set/override to.
+# If we don't we risk trying to run an arm64 executable on a amd64 CPU.
+# This would result in the following error:
+# ```
+# fork/exec C:\Users\%USERNAME%\AppData\Local\Temp\go-build3692463925\b001\exe\prebuild.exe:
+# This version of %1 is not compatible with the version of Windows you're running.
+# Check your computer's system information and then contact the software publisher.
+$oldGOARCH = $Env:GOARCH
+try {
+    $Env:GOARCH = $(go env GOHOSTARCH);
+    go generate ./...
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to run go generators: exit code $LASTEXITCODE"
+    }
+}
+finally {
+    $Env:GOARCH = $oldGOARCH
 }
 
 Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."

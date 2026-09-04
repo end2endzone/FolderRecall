@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/end2endzone/FolderRecall/internal/recall"
 	"github.com/end2endzone/FolderRecall/internal/spinner"
 	"github.com/end2endzone/FolderRecall/internal/version"
 
@@ -394,7 +395,7 @@ func run(args []string) int {
 		}
 
 		// Do we need to create the tables ?
-		exists, err := AllTablesExists(dbConn)
+		exists, err := recall.AllTablesExists(dbConn)
 		if err != nil {
 			reportArgumentParsingError("failed to detect existing tables in database '%s' with error: %v", cfg.DatabasePath, err)
 			return 4
@@ -402,16 +403,16 @@ func run(args []string) int {
 		if !exists {
 			// They do not exists, create them
 			fmt.Printf("Creating tables in database...\n")
-			err = CreateTables(dbConn)
+			err = recall.CreateTables(dbConn)
 			if err != nil {
 				reportArgumentParsingError("failed to create tables in database '%s' with error: %v", cfg.DatabasePath, err)
 				return 5
 			}
 		} else {
 			// Existing tables in this database
-			latestId, err := GetLatestSnapshotId(dbConn)
-			if err == nil && latestId != InvalidId {
-				snapshot, err := LoadSnapshot(dbConn, latestId)
+			latestId, err := recall.GetLatestSnapshotId(dbConn)
+			if err == nil && latestId != recall.InvalidId {
+				snapshot, err := recall.LoadSnapshot(dbConn, latestId)
 				if err == nil {
 					fmt.Printf("Latest snapshot is %s\n", snapshot.String())
 				}
@@ -422,7 +423,7 @@ func run(args []string) int {
 	// Call the actual command helpers
 	switch {
 	case cfg.CommandExport != "":
-		err = cmdExport(cfg)
+		err = cmdExport(dbConn, cfg)
 	case cfg.CommandInstall:
 		err = cmdInstall(cfg)
 	case cfg.CommandUninstall:
@@ -483,11 +484,11 @@ func cmdMonitor(db *sql.DB, cfg Config) error {
 			fmt.Printf("Snapshot: ")
 
 			// Take & save a snapshot
-			snapshot, err := CreateSnapshotNow()
+			snapshot, err := recall.CreateSnapshotNow()
 			if err != nil {
 				return err
 			}
-			err = SaveSnapshot(db, &snapshot)
+			err = recall.SaveSnapshot(db, &snapshot)
 			if err != nil {
 				return err
 			}
@@ -654,7 +655,7 @@ func cmdUninstall(cfg Config) error {
 
 // cmdPrint get the current list of directories from File Explorer and print them on the console.
 func cmdPrint(cfg Config) error {
-	snapshot, err := CreateSnapshotNow()
+	snapshot, err := recall.CreateSnapshotNow()
 	if err != nil {
 		return err
 	}
@@ -671,13 +672,13 @@ func cmdPrint(cfg Config) error {
 }
 
 // cmdExport exports the current history to a json file.
-func cmdExport(cfg Config) error {
+func cmdExport(db *sql.DB, cfg Config) error {
 	fmt.Printf("\n")
 	fmt.Printf("Exporting snapshots.\n")
 	fmt.Printf("  Database: %s\n", cfg.DatabasePath)
 	fmt.Printf("  File:     %s\n", cfg.CommandExport)
 
-	err := ExportSnapshotsToJson(dbConn, cfg.CommandExport)
+	err := recall.ExportSnapshotsToJson(db, cfg.CommandExport)
 	if err != nil {
 		return err
 	}
@@ -709,7 +710,7 @@ func ParseYesNo(str string) (bool, error) {
 
 // cmdRecall prints latest snapshots and ask to restore one of them.
 func cmdRecall(db *sql.DB, cfg Config) error {
-	candidates, err := GetSnapshotRecallCandidates(db)
+	candidates, err := recall.GetSnapshotRecallCandidates(db)
 	if err != nil {
 		return err
 	}
@@ -722,21 +723,21 @@ func cmdRecall(db *sql.DB, cfg Config) error {
 	absoluteIndex := 0
 
 	fmt.Printf("Daily snapshots:\n")
-	for _, snapshot := range candidates.daily {
+	for _, snapshot := range candidates.Daily {
 		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
 		absoluteIndex += 1
 	}
 	fmt.Printf("\n")
 
 	fmt.Printf("Hourly snapshots:\n")
-	for _, snapshot := range candidates.hourly {
+	for _, snapshot := range candidates.Hourly {
 		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
 		absoluteIndex += 1
 	}
 	fmt.Printf("\n")
 
 	fmt.Printf("Latest snapshots:\n")
-	for _, snapshot := range candidates.latest {
+	for _, snapshot := range candidates.Latest {
 		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
 		absoluteIndex += 1
 	}

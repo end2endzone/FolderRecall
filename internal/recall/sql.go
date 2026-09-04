@@ -1,4 +1,4 @@
-package main
+package recall
 
 import (
 	"database/sql"
@@ -15,9 +15,6 @@ import (
 
 //go:embed schema.sql
 var databaseSchema string
-
-// Global or package-level DB reference for the requested helper function
-var dbConn *sql.DB
 
 // CreateTables initializes the schema for the program.
 func CreateTables(db *sql.DB) error {
@@ -426,9 +423,9 @@ func GetSnapshotsCount(db *sql.DB) (int, error) {
 func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 
 	candidates := &Candidates{
-		daily:  []*Snapshot{},
-		hourly: []*Snapshot{},
-		latest: []*Snapshot{},
+		Daily:  []*Snapshot{},
+		Hourly: []*Snapshot{},
+		Latest: []*Snapshot{},
 	}
 
 	now := time.Now().Round(0)
@@ -453,7 +450,7 @@ func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 			return nil, err
 		}
 
-		candidates.daily = append(candidates.daily, snapshot)
+		candidates.Daily = append(candidates.Daily, snapshot)
 	}
 
 	// append the first snapshots of the last 24 hours
@@ -476,7 +473,7 @@ func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 			return nil, err
 		}
 
-		candidates.hourly = append(candidates.hourly, snapshot)
+		candidates.Hourly = append(candidates.Hourly, snapshot)
 	}
 
 	// append the lastest 10 snapshots
@@ -495,13 +492,13 @@ func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 			return nil, err
 		}
 
-		candidates.latest = append(candidates.latest, snapshot)
+		candidates.Latest = append(candidates.Latest, snapshot)
 	}
 
 	// Simplify each categories
-	candidates.daily = SimplifySnapshotsByDirectory(candidates.daily)
-	candidates.hourly = SimplifySnapshotsByDirectory(candidates.hourly)
-	candidates.latest = SimplifySnapshotsByDirectory(candidates.latest)
+	candidates.Daily = SimplifySnapshotsByDirectory(candidates.Daily)
+	candidates.Hourly = SimplifySnapshotsByDirectory(candidates.Hourly)
+	candidates.Latest = SimplifySnapshotsByDirectory(candidates.Latest)
 
 	return candidates, nil
 }

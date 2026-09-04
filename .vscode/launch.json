@@ -192,6 +192,36 @@
             "args": [
                 "--uninstall"
             ]
+        },
+        {
+            "name": "fldrecall --recall (no candidates)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/cmd/fldrecall",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: reset sandbox",
+            "args": [
+                "--recall",
+                "--dbpath",
+                "${workspaceFolder}/.debug-sandbox/testdata/i-do-not-exists.db"
+            ]
+        },
+        {
+            "name": "fldrecall --recall",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/cmd/fldrecall",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: advanced sandbox",
+            "args": [
+                "--recall",
+                "--dbpath",
+                "${workspaceFolder}/.debug-sandbox/testdata/recall/recall.db"
+            ]
         }
     ]
 }

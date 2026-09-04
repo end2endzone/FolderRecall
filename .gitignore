@@ -37,3 +37,8 @@ cmd/fldrecall/__debug_bin.exe
 resources/icon16.png
 resources/icon32.png
 resources/icon64.png
+
+cmd/advanced-debug-sandbox/folders.go
+cmd/advanced-debug-sandbox/schema.sql
+cmd/advanced-debug-sandbox/sql.go
+cmd/advanced-debug-sandbox/types.go

@@ -116,6 +116,29 @@
                 "showReuseMessage": false,
                 "clear": true
             }
+        },
+        {
+            "label": "debug: advanced sandbox",
+            "detail": "Add additional advanced testdata files to the .debug-sandbox",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "go run ./cmd/advanced-debug-sandbox/",
+            "dependsOn": [
+                "debug: reset sandbox"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
         }
     ]
 }

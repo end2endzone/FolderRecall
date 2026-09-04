@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ type Config struct {
 	CommandUninstall bool
 	CommandPrint     bool
 	CommandMonitor   bool
+	CommandRecall    bool
 	DatabasePath     string
 	Interval         int
 	NoHeader         bool
@@ -101,6 +103,7 @@ func newAppFlagSet(cfg *Config) *flag.FlagSet {
 	fs.BoolVar(&cfg.CommandUninstall, "uninstall", false, "|Uninstall all shortcuts for this application such as in shell:startup directory.")
 	fs.BoolVar(&cfg.CommandPrint, "print", false, "|Print the current list of directories in File Explorer.")
 	fs.BoolVar(&cfg.CommandMonitor, "monitor", false, "|Monitor and log navigation history.")
+	fs.BoolVar(&cfg.CommandRecall, "recall", false, "|Print latest snapshots and ask to restore one of them.")
 	fs.StringVar(&cfg.DatabasePath, "dbpath", "", "<path>|Path to the database file to store navigation history.\nDefaut's to %USERPROFILE%\\fldrecall.db")
 	fs.IntVar(&cfg.Interval, "interval", InvalidInterval, "<value>|Interval time in seconds between snapshots.")
 	fs.BoolVar(&cfg.NoHeader, "no-header", false, "|Do not show product header when running a command.")
@@ -344,7 +347,7 @@ func run(args []string) int {
 	// Count how many commands are specified in the arguments
 	// Do not count `--version` and `--help` as these were already processed above.
 	commandsSet := 0
-	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandInstall, cfg.CommandUninstall, cfg.CommandPrint, cfg.CommandMonitor} {
+	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandInstall, cfg.CommandUninstall, cfg.CommandPrint, cfg.CommandMonitor, cfg.CommandRecall} {
 		if set {
 			commandsSet++
 		}
@@ -382,7 +385,7 @@ func run(args []string) int {
 		}
 	}()
 
-	if !isDatabaseConnectionRequired(cfg) {
+	if isDatabaseConnectionRequired(cfg) {
 		// If database is specified, try to connect to it.
 		dbConn, err = sql.Open("sqlite", cfg.DatabasePath)
 		if err != nil {
@@ -428,6 +431,8 @@ func run(args []string) int {
 		err = cmdPrint(cfg)
 	case cfg.CommandMonitor:
 		err = cmdMonitor(dbConn, cfg)
+	case cfg.CommandRecall:
+		err = cmdRecall(dbConn, cfg)
 	}
 
 	// Check for an error while running a command.
@@ -675,6 +680,114 @@ func cmdExport(cfg Config) error {
 	err := ExportSnapshotsToJson(dbConn, cfg.CommandExport)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ParseYesNo parses a string into a yes or no answer
+func ParseYesNo(str string) (bool, error) {
+	if str == "y" ||
+		str == "Y" ||
+		str == "yes" ||
+		str == "YES" ||
+		str == "1" {
+		return true, nil
+	}
+
+	if str == "n" ||
+		str == "N" ||
+		str == "no" ||
+		str == "NO" ||
+		str == "0" {
+		return false, nil
+	}
+
+	err := fmt.Errorf("unknown yes/no value: %s", str)
+	return false, err
+}
+
+// cmdRecall prints latest snapshots and ask to restore one of them.
+func cmdRecall(db *sql.DB, cfg Config) error {
+	candidates, err := GetSnapshotRecallCandidates(db)
+	if err != nil {
+		return err
+	}
+
+	if candidates.Count() == 0 {
+		fmt.Printf("No candidates for recall operation.\n")
+		return nil
+	}
+
+	absoluteIndex := 0
+
+	fmt.Printf("Daily snapshots:\n")
+	for _, snapshot := range candidates.daily {
+		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
+		absoluteIndex += 1
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Hourly snapshots:\n")
+	for _, snapshot := range candidates.hourly {
+		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
+		absoluteIndex += 1
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Latest snapshots:\n")
+	for _, snapshot := range candidates.latest {
+		fmt.Printf("%2d: %s\n", absoluteIndex, snapshot.String())
+		absoluteIndex += 1
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Enter your desired snapshot to recall: ")
+
+	// Scanln reads user input until a newline (\n) or space is hit
+	var input string
+	_, err = fmt.Scanln(&input)
+	if err != nil {
+		return err
+	}
+
+	// Convert to integer
+	absoluteIndex, err = strconv.Atoi(input)
+	if err != nil {
+		return err
+	}
+	if absoluteIndex >= candidates.Count() {
+		err = fmt.Errorf("failed to recall snapshot: index out of scope")
+		return err
+	}
+
+	// Get the snapshot to restore
+	snapshot := candidates.GetSnapshotByAbsIndex(absoluteIndex)
+	if snapshot == nil {
+		err = fmt.Errorf("failed to recall snapshot: snapshot is nil")
+		return err
+	}
+
+	fmt.Printf("\nYou want to recall the following snapshot:\n")
+	fmt.Printf("%s\n", snapshot.String())
+	fmt.Printf("\nAre you sure (y/n) ? ")
+
+	_, err = fmt.Scanln(&input)
+	if err != nil {
+		return err
+	}
+
+	yes, err := ParseYesNo(input)
+	if err != nil {
+		return err
+	}
+
+	// If user has answered 'yes', proceed with the restore/recall
+	if yes {
+		err = snapshot.Restore()
+		if err != nil {
+			return fmt.Errorf("unable to restore snapshot: %v", err)
+		}
 	}
 
 	return nil

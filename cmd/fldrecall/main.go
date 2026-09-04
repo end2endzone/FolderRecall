@@ -498,45 +498,46 @@ func cmdMonitor(db *sql.DB, cfg Config) error {
 	return err
 }
 
-// cmdInstall installs a Windows Shortcut in shell:startup directory to start monitoring Windows Explorer windows at windows startup.
-func cmdInstall(cfg Config) error {
+// getAppShortcuts get all application shortcuts for the application.
+func getAppShortcuts(cfg Config) ([]shortcut.Shortcut, error) {
+	var shortcuts = []shortcut.Shortcut{}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return shortcuts, err
 	}
 
 	appDataDir, err := os.UserConfigDir()
 	if err != nil {
-		return err
+		return shortcuts, err
 	}
 
 	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs`
 	programsDir := filepath.Join(appDataDir, "Microsoft", "Windows", "Start Menu", "Programs")
 	info, err := os.Stat(programsDir)
 	if err != nil {
-		return err
+		return shortcuts, err
 	}
 	if !info.IsDir() {
 		err = fmt.Errorf("path is not a directory: %s", programsDir)
-		return err
+		return shortcuts, err
 	}
 
 	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
 	startupDir := filepath.Join(programsDir, "Startup")
 	info, err = os.Stat(startupDir)
 	if err != nil {
-		return err
+		return shortcuts, err
 	}
 	if !info.IsDir() {
 		err = fmt.Errorf("path is not a directory: %s", startupDir)
-		return err
+		return shortcuts, err
 	}
 
 	// Find the path to this executable
 	exePath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to find executable path: %v", err)
+		return shortcuts, fmt.Errorf("failed to find executable path: %v", err)
 	}
 
 	iconPath := exePath + ",0"
@@ -551,14 +552,7 @@ func cmdInstall(cfg Config) error {
 			IconLocation:     iconPath, // Target path or .ico file
 			WorkingDirectory: homeDir,
 		}
-		err = shortcut.Create(sc)
-		if err != nil {
-			return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
-		}
-
-		scFileNameWithoutExt := strings.ReplaceAll(filepath.Base(sc.ShortcutPath), ".lnk", "")
-		scDir := filepath.Dir(sc.ShortcutPath)
-		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileNameWithoutExt, scDir)
+		shortcuts = append(shortcuts, sc)
 	}
 
 	// Create manual restore shortcut
@@ -571,14 +565,25 @@ func cmdInstall(cfg Config) error {
 			IconLocation:     iconPath, // Target path or .ico file
 			WorkingDirectory: homeDir,
 		}
+		shortcuts = append(shortcuts, sc)
+	}
+
+	return shortcuts, nil
+}
+
+// cmdInstall installs mulriple shortcuts to this application such as in shell:startup directory.
+func cmdInstall(cfg Config) error {
+	shortcuts, err := getAppShortcuts(cfg)
+
+	for _, sc := range shortcuts {
 		err = shortcut.Create(sc)
 		if err != nil {
 			return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
 		}
 
-		scFileNameWithoutExt := strings.ReplaceAll(filepath.Base(sc.ShortcutPath), ".lnk", "")
+		scFileName := filepath.Base(sc.ShortcutPath)
 		scDir := filepath.Dir(sc.ShortcutPath)
-		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileNameWithoutExt, scDir)
+		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileName, scDir)
 	}
 
 	// Success

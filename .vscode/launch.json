@@ -166,6 +166,19 @@
                 "--dbpath",
                 "${workspaceFolder}/.debug-sandbox/testdata/mock-snapshots.db"
             ]
+        },
+        {
+            "name": "fldrecall --install",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/cmd/fldrecall",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: reset sandbox",
+            "args": [
+                "--install"
+            ]
         }
     ]
 }

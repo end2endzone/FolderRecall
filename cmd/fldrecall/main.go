@@ -20,13 +20,16 @@ import (
 
 	"github.com/end2endzone/FolderRecall/internal/build"
 	"github.com/end2endzone/FolderRecall/internal/spinner"
+
 	ole "github.com/go-ole/go-ole"
 	// ole2 "github.com/go-ole/go-ole/oleutil"
+	"github.com/jxeng/shortcut"
 )
 
 // Config holds all the command-line argument values
 type Config struct {
 	CommandExport  string
+	CommandInstall bool
 	CommandPrint   bool
 	CommandMonitor bool
 	DatabasePath   string
@@ -93,6 +96,7 @@ func newAppFlagSet(cfg *Config) *flag.FlagSet {
 
 	// Bind string flags directly to the struct fields
 	fs.StringVar(&cfg.CommandExport, "export", "", "<path>|Export the nagivation history to a json file.\nDefaut's to %USERPROFILE%\\fldrecall.json")
+	fs.BoolVar(&cfg.CommandInstall, "install", false, "|Install a shortcut to start monitoring when Windows starts.")
 	fs.BoolVar(&cfg.CommandPrint, "print", false, "|Print the current list of directories in File Explorer.")
 	fs.BoolVar(&cfg.CommandMonitor, "monitor", false, "|Monitor and log navigation history.")
 	fs.StringVar(&cfg.DatabasePath, "dbpath", "", "<path>|Path to the database file to store navigation history.\nDefaut's to %USERPROFILE%\\fldrecall.db")
@@ -179,6 +183,7 @@ func printUsage(fs *flag.FlagSet) {
 	// Print static usage header
 	const usageText = `Usage:
     fldrecall --export <path> [--no-header] [--verbose]
+    fldrecall --install
     fldrecall --print [--no-header] [--verbose]
     fldrecall --monitor [--no-header] --dbpath <path> [--no-header] [--verbose]
     fldrecall --version [--verbose]
@@ -258,6 +263,16 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintf(output, exampleText) //Bug: can not use fmt.Fprintln() without error: "fmt.Fprintln call has possible Printf formatting directive %U"
 }
 
+// isDatabaseConnectionRequired checks if a database connection is required for executing the requested command
+func isDatabaseConnectionRequired(cfg Config) bool {
+	switch {
+	case cfg.CommandInstall:
+		return false
+	default:
+		return true
+	}
+}
+
 func run(args []string) int {
 	var cfg Config
 	fs := newAppFlagSet(&cfg)
@@ -325,7 +340,7 @@ func run(args []string) int {
 	// Count how many commands are specified in the arguments
 	// Do not count `--version` and `--help` as these were already processed above.
 	commandsSet := 0
-	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandPrint, cfg.CommandMonitor} {
+	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandInstall, cfg.CommandPrint, cfg.CommandMonitor} {
 		if set {
 			commandsSet++
 		}
@@ -353,35 +368,46 @@ func run(args []string) int {
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
 
-	// If database is specified, try to connect to it.
-	dbConn, err = sql.Open("sqlite", cfg.DatabasePath)
-	if err != nil {
-		reportArgumentParsingError("failed to connect to database '%s' with error: %v", cfg.DatabasePath, err)
-		return 3
-	}
-	defer dbConn.Close()
-
-	// Do we need to create the tables ?
-	exists, err := AllTablesExists(dbConn)
-	if err != nil {
-		reportArgumentParsingError("failed to detect existing tables in database '%s' with error: %v", cfg.DatabasePath, err)
-		return 4
-	}
-	if !exists {
-		// They do not exists, create them
-		fmt.Printf("Creating tables in database...\n")
-		err = CreateTables(dbConn)
-		if err != nil {
-			reportArgumentParsingError("failed to create tables in database '%s' with error: %v", cfg.DatabasePath, err)
-			return 5
+	// Define a database object.
+	// That is cleaned up only when non-null.
+	// The database connection object will be set when a connection is required
+	var dbConn *sql.DB
+	defer func() {
+		if dbConn != nil {
+			dbConn.Close()
 		}
-	} else {
-		// Existing tables in this database
-		latestId, err := GetLatestSnapshotId(dbConn)
-		if err == nil && latestId != InvalidId {
-			snapshot, err := LoadSnapshot(dbConn, latestId)
-			if err == nil {
-				fmt.Printf("Latest snapshot is %s\n", snapshot.String())
+	}()
+
+	if !isDatabaseConnectionRequired(cfg) {
+		// If database is specified, try to connect to it.
+		dbConn, err = sql.Open("sqlite", cfg.DatabasePath)
+		if err != nil {
+			reportArgumentParsingError("failed to connect to database '%s' with error: %v", cfg.DatabasePath, err)
+			return 3
+		}
+
+		// Do we need to create the tables ?
+		exists, err := AllTablesExists(dbConn)
+		if err != nil {
+			reportArgumentParsingError("failed to detect existing tables in database '%s' with error: %v", cfg.DatabasePath, err)
+			return 4
+		}
+		if !exists {
+			// They do not exists, create them
+			fmt.Printf("Creating tables in database...\n")
+			err = CreateTables(dbConn)
+			if err != nil {
+				reportArgumentParsingError("failed to create tables in database '%s' with error: %v", cfg.DatabasePath, err)
+				return 5
+			}
+		} else {
+			// Existing tables in this database
+			latestId, err := GetLatestSnapshotId(dbConn)
+			if err == nil && latestId != InvalidId {
+				snapshot, err := LoadSnapshot(dbConn, latestId)
+				if err == nil {
+					fmt.Printf("Latest snapshot is %s\n", snapshot.String())
+				}
 			}
 		}
 	}
@@ -390,6 +416,8 @@ func run(args []string) int {
 	switch {
 	case cfg.CommandExport != "":
 		err = cmdExport(cfg)
+	case cfg.CommandInstall:
+		err = cmdInstall(cfg)
 	case cfg.CommandPrint:
 		err = cmdPrint(cfg)
 	case cfg.CommandMonitor:
@@ -468,6 +496,58 @@ func cmdMonitor(db *sql.DB, cfg Config) error {
 
 	err := ctx.Err()
 	return err
+}
+
+// cmdInstall installs a Windows Shortcut in shell:startup directory to start monitoring Windows Explorer windows at windows startup.
+func cmdInstall(cfg Config) error {
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+	appDataDir, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+	startupDir := filepath.Join(appDataDir, "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+	info, err := os.Stat(startupDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		err = fmt.Errorf("path is not a directory: %s", startupDir)
+		return err
+	}
+
+	// Find the path to this executable
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to find executable path: %v", err)
+	}
+
+	iconPath := exePath + ",0"
+
+	// Prepare shortcut
+	sc := shortcut.Shortcut{
+		ShortcutPath:     filepath.Join(startupDir, "fldrecall.lnk"), // Path where shortcut is saved
+		Target:           exePath,                                    // Path to executable
+		Arguments:        "--monitor --interval 60",                  // Optional arguments
+		Description:      "Monitor File Explorer windows every 60 seconds",
+		IconLocation:     iconPath, // Target path or .ico file
+		WorkingDirectory: homeDir,
+	}
+
+	err = shortcut.Create(sc)
+	if err != nil {
+		return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
+	}
+
+	// Success
+	fmt.Printf("Created shortcut in directory: %s\n", startupDir)
+
+	return nil
 }
 
 // cmdPrint get the current list of directories from File Explorer and print them on the console.

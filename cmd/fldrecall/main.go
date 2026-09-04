@@ -28,16 +28,17 @@ import (
 
 // Config holds all the command-line argument values
 type Config struct {
-	CommandExport  string
-	CommandInstall bool
-	CommandPrint   bool
-	CommandMonitor bool
-	DatabasePath   string
-	Interval       int
-	NoHeader       bool
-	Verbose        bool
-	Version        bool
-	Help           bool
+	CommandExport    string
+	CommandInstall   bool
+	CommandUninstall bool
+	CommandPrint     bool
+	CommandMonitor   bool
+	DatabasePath     string
+	Interval         int
+	NoHeader         bool
+	Verbose          bool
+	Version          bool
+	Help             bool
 }
 
 const DefaultInterval = 30
@@ -96,7 +97,8 @@ func newAppFlagSet(cfg *Config) *flag.FlagSet {
 
 	// Bind string flags directly to the struct fields
 	fs.StringVar(&cfg.CommandExport, "export", "", "<path>|Export the nagivation history to a json file.\nDefaut's to %USERPROFILE%\\fldrecall.json")
-	fs.BoolVar(&cfg.CommandInstall, "install", false, "|Install a shortcut to start monitoring when Windows starts.")
+	fs.BoolVar(&cfg.CommandInstall, "install", false, "|Install all shortcuts for this application such as in shell:startup directory.")
+	fs.BoolVar(&cfg.CommandUninstall, "uninstall", false, "|Uninstall all shortcuts for this application such as in shell:startup directory.")
 	fs.BoolVar(&cfg.CommandPrint, "print", false, "|Print the current list of directories in File Explorer.")
 	fs.BoolVar(&cfg.CommandMonitor, "monitor", false, "|Monitor and log navigation history.")
 	fs.StringVar(&cfg.DatabasePath, "dbpath", "", "<path>|Path to the database file to store navigation history.\nDefaut's to %USERPROFILE%\\fldrecall.db")
@@ -268,6 +270,8 @@ func isDatabaseConnectionRequired(cfg Config) bool {
 	switch {
 	case cfg.CommandInstall:
 		return false
+	case cfg.CommandUninstall:
+		return false
 	default:
 		return true
 	}
@@ -340,7 +344,7 @@ func run(args []string) int {
 	// Count how many commands are specified in the arguments
 	// Do not count `--version` and `--help` as these were already processed above.
 	commandsSet := 0
-	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandInstall, cfg.CommandPrint, cfg.CommandMonitor} {
+	for _, set := range []bool{cfg.CommandExport != "", cfg.CommandInstall, cfg.CommandUninstall, cfg.CommandPrint, cfg.CommandMonitor} {
 		if set {
 			commandsSet++
 		}
@@ -418,6 +422,8 @@ func run(args []string) int {
 		err = cmdExport(cfg)
 	case cfg.CommandInstall:
 		err = cmdInstall(cfg)
+	case cfg.CommandUninstall:
+		err = cmdUninstall(cfg)
 	case cfg.CommandPrint:
 		err = cmdPrint(cfg)
 	case cfg.CommandMonitor:
@@ -568,12 +574,28 @@ func getAppShortcuts(cfg Config) ([]shortcut.Shortcut, error) {
 		shortcuts = append(shortcuts, sc)
 	}
 
+	// Create manual uninstall shortcut
+	{
+		sc := shortcut.Shortcut{
+			ShortcutPath:     filepath.Join(programsDir, "FolderRecall - Uninstall.lnk"), // Path where shortcut is saved
+			Target:           exePath,                                                    // Path to executable
+			Arguments:        "--uninstall",                                              // Optional arguments
+			Description:      "Uninstalls all shortcuts for this application",
+			IconLocation:     iconPath, // Target path or .ico file
+			WorkingDirectory: homeDir,
+		}
+		shortcuts = append(shortcuts, sc)
+	}
+
 	return shortcuts, nil
 }
 
 // cmdInstall installs mulriple shortcuts to this application such as in shell:startup directory.
 func cmdInstall(cfg Config) error {
 	shortcuts, err := getAppShortcuts(cfg)
+	if err != nil {
+		return err
+	}
 
 	for _, sc := range shortcuts {
 		err = shortcut.Create(sc)
@@ -583,7 +605,42 @@ func cmdInstall(cfg Config) error {
 
 		scFileName := filepath.Base(sc.ShortcutPath)
 		scDir := filepath.Dir(sc.ShortcutPath)
-		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileName, scDir)
+		fmt.Printf("Created shortcut '%s' in directory %s.\n", scFileName, scDir)
+	}
+
+	// Success
+	return nil
+}
+
+// cmdUninstall uninstalls all shortcuts for this application such as in shell:startup directory.
+func cmdUninstall(cfg Config) error {
+	shortcuts, err := getAppShortcuts(cfg)
+	if err != nil {
+		return err
+	}
+
+	for _, sc := range shortcuts {
+		// Is this shortcut exists ?
+		info, err := os.Stat(sc.ShortcutPath)
+		if err != nil {
+			// Shortcut does not exists, that's fine!
+			fmt.Printf("Shortcut not found: %s.\n", sc.ShortcutPath)
+			continue
+		}
+		if info.IsDir() {
+			err = fmt.Errorf("path is not a shortcut: %s", sc.ShortcutPath)
+			return err
+		}
+
+		// Delete this shortcut
+		err = os.Remove(sc.ShortcutPath)
+		if err != nil {
+			return fmt.Errorf("failed to delete shortcut %s: %v", sc.ShortcutPath, err)
+		}
+
+		scFileName := filepath.Base(sc.ShortcutPath)
+		scDir := filepath.Dir(sc.ShortcutPath)
+		fmt.Printf("Deleted shortcut '%s' from directory %s.\n", scFileName, scDir)
 	}
 
 	// Success

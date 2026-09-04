@@ -179,6 +179,19 @@
             "args": [
                 "--install"
             ]
+        },
+        {
+            "name": "fldrecall --uninstall",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/cmd/fldrecall",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: reset sandbox",
+            "args": [
+                "--uninstall"
+            ]
         }
     ]
 }

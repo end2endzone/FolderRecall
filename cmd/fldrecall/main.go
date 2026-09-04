@@ -55,7 +55,7 @@ func printHeader() {
 }
 
 func printVersion(verbose bool) {
-	fmt.Fprintf(os.Stdout, "Version %s.\n", GetProductVersionString())
+	fmt.Fprintf(os.Stdout, "Version %s.\n", version.GetProductVersionString())
 
 	if verbose {
 		metadata := version.GetBuildMetadata()

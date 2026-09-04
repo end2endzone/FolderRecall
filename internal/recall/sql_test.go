@@ -445,14 +445,18 @@ func TestDeleteSnapshotsOlderThanDays(t *testing.T) {
 
 	// DeleteSnapshotsOlderThanDays()
 	{
-		// Delete snapshots [1, 5], leaving [6,10]
+		// Note:
+		// This test is fuzzy. Depending on the current time, deleting snapshots older than days 3
+		// results in deleting 4 or 5 snapshots depending on the current time.
+		// Delete snapshots [1, 4] leaving [5,10]  or
+		// Delete snapshots [1, 5] leaving [6,10]
 		err = DeleteSnapshotsOlderThanDays(dbConn, 3)
 		require.NoError(t, err)
 
 		// Get all remaining snapshots
 		snapshots, err := GetLastNSnapshots(dbConn, 999)
 		require.NoError(t, err)
-		require.Len(t, snapshots, 5)
+		require.True(t, len(snapshots) == 4 || len(snapshots) == 5)
 	}
 }
 

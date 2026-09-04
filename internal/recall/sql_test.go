@@ -14,6 +14,9 @@ import (
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
 
+// Global object for tests
+var dbConn *sql.DB
+
 // GenerateMockSnapshots creates 10 mock snapshot structures with mixed data.
 func GenerateMockSnapshots() []*Snapshot {
 	// Pre-define a pool of sample directory paths

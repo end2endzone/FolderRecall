@@ -573,19 +573,19 @@ func TestGetSnapshotRecallCandidates(t *testing.T) {
 			fmt.Printf("Snapshots exported to file '%s'\n", jsonFilePath)
 
 			fmt.Printf("Daily snapshots:\n")
-			for i, snapshot := range candidates.daily {
+			for i, snapshot := range candidates.Daily {
 				fmt.Printf("%2d: %s\n", i, snapshot.String())
 			}
 			fmt.Printf("\n")
 
 			fmt.Printf("Hourly snapshots:\n")
-			for i, snapshot := range candidates.hourly {
+			for i, snapshot := range candidates.Hourly {
 				fmt.Printf("%2d: %s\n", i, snapshot.String())
 			}
 			fmt.Printf("\n")
 
 			fmt.Printf("Latest snapshots:\n")
-			for i, snapshot := range candidates.latest {
+			for i, snapshot := range candidates.Latest {
 				fmt.Printf("%2d: %s\n", i, snapshot.String())
 			}
 			fmt.Printf("\n")

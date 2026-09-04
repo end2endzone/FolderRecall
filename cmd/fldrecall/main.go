@@ -506,13 +506,25 @@ func cmdInstall(cfg Config) error {
 		return err
 	}
 
-	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
 	appDataDir, err := os.UserConfigDir()
 	if err != nil {
 		return err
 	}
-	startupDir := filepath.Join(appDataDir, "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-	info, err := os.Stat(startupDir)
+
+	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs`
+	programsDir := filepath.Join(appDataDir, "Microsoft", "Windows", "Start Menu", "Programs")
+	info, err := os.Stat(programsDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		err = fmt.Errorf("path is not a directory: %s", programsDir)
+		return err
+	}
+
+	// Find directory `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+	startupDir := filepath.Join(programsDir, "Startup")
+	info, err = os.Stat(startupDir)
 	if err != nil {
 		return err
 	}
@@ -529,24 +541,47 @@ func cmdInstall(cfg Config) error {
 
 	iconPath := exePath + ",0"
 
-	// Prepare shortcut
-	sc := shortcut.Shortcut{
-		ShortcutPath:     filepath.Join(startupDir, "fldrecall.lnk"), // Path where shortcut is saved
-		Target:           exePath,                                    // Path to executable
-		Arguments:        "--monitor --interval 60",                  // Optional arguments
-		Description:      "Monitor File Explorer windows every 60 seconds",
-		IconLocation:     iconPath, // Target path or .ico file
-		WorkingDirectory: homeDir,
+	// Create startup monitoring shortcut
+	{
+		sc := shortcut.Shortcut{
+			ShortcutPath:     filepath.Join(startupDir, "FolderRecall.lnk"), // Path where shortcut is saved
+			Target:           exePath,                                       // Path to executable
+			Arguments:        "--monitor --interval 60",                     // Optional arguments
+			Description:      "Monitor File Explorer windows every 60 seconds",
+			IconLocation:     iconPath, // Target path or .ico file
+			WorkingDirectory: homeDir,
+		}
+		err = shortcut.Create(sc)
+		if err != nil {
+			return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
+		}
+
+		scFileNameWithoutExt := strings.ReplaceAll(filepath.Base(sc.ShortcutPath), ".lnk", "")
+		scDir := filepath.Dir(sc.ShortcutPath)
+		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileNameWithoutExt, scDir)
 	}
 
-	err = shortcut.Create(sc)
-	if err != nil {
-		return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
+	// Create manual restore shortcut
+	{
+		sc := shortcut.Shortcut{
+			ShortcutPath:     filepath.Join(programsDir, "FolderRecall - Restore.lnk"), // Path where shortcut is saved
+			Target:           exePath,                                                  // Path to executable
+			Arguments:        "--restore",                                              // Optional arguments
+			Description:      "Restore a snapshot from the database",
+			IconLocation:     iconPath, // Target path or .ico file
+			WorkingDirectory: homeDir,
+		}
+		err = shortcut.Create(sc)
+		if err != nil {
+			return fmt.Errorf("failed to create shortcut %s: %v", sc.ShortcutPath, err)
+		}
+
+		scFileNameWithoutExt := strings.ReplaceAll(filepath.Base(sc.ShortcutPath), ".lnk", "")
+		scDir := filepath.Dir(sc.ShortcutPath)
+		fmt.Printf("Created '%s' shortcut in directory %s.\n", scFileNameWithoutExt, scDir)
 	}
 
 	// Success
-	fmt.Printf("Created shortcut in directory: %s\n", startupDir)
-
 	return nil
 }
 

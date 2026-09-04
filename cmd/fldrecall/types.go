@@ -35,6 +35,34 @@ type DirectoryDiff struct {
 	Removed []string
 }
 
+func (c *Candidates) Count() int {
+	count := len(c.latest) + len(c.hourly) + len(c.daily)
+	return count
+}
+
+func (c *Candidates) GetSnapshotByAbsIndex(idx int) *Snapshot {
+	if idx >= c.Count() {
+		return nil
+	}
+
+	if idx < len(c.daily) {
+		return c.daily[idx]
+	}
+	idx -= len(c.daily)
+
+	if idx < len(c.hourly) {
+		return c.hourly[idx]
+	}
+	idx -= len(c.hourly)
+
+	if idx < len(c.latest) {
+		return c.latest[idx]
+	}
+	idx -= len(c.latest)
+
+	return nil
+}
+
 func (s *Snapshot) AddDirectory(path string) {
 	dir := Directory{
 		Id:   InvalidId,

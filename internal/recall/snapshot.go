@@ -181,39 +181,3 @@ func (s *Snapshot) CompareDirectories(other *Snapshot) DirectoryDiff {
 		Removed: removed,
 	}
 }
-
-// SimplifySnapshotsByDirectory removes consecutive snapshots in a slice that are similar to the following one.
-// When multiple consecutive snapshots are similar, only the last one (bigger timestamp) is preserved.
-func SimplifySnapshotsByDirectory(snapshots []*Snapshot) []*Snapshot {
-	var lastMeaningfulSnapshot *Snapshot
-
-	meaningfulSnapshots := []*Snapshot{}
-
-	// Check each snapshots one by one to see if they are meaningful
-	for _, s := range snapshots {
-
-		// No existing meaningful snapshot yet
-		if lastMeaningfulSnapshot == nil || len(meaningfulSnapshots) == 0 {
-			// keep the first snapshot
-			lastMeaningfulSnapshot = s
-			meaningfulSnapshots = append(meaningfulSnapshots, s)
-			continue
-		}
-
-		// Is this snapshot different than the last one ?
-		diff := lastMeaningfulSnapshot.CompareDirectories(s)
-		if len(diff.Added) == 0 && len(diff.Removed) == 0 {
-			// This snapshot is identical to the last meaningful one (same directories / no changes.)
-			// It must replace the lastMeaningfulSnapshot
-			lastMeaningfulSnapshot = s
-			meaningfulSnapshots[len(meaningfulSnapshots)-1] = s
-			continue
-		}
-
-		// This one is meaningful
-		lastMeaningfulSnapshot = s
-		meaningfulSnapshots = append(meaningfulSnapshots, s)
-	}
-
-	return meaningfulSnapshots
-}

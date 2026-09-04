@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/end2endzone/FolderRecall/internal/recall"
 	"github.com/go-ole/go-ole"
 )
 
@@ -133,6 +134,7 @@ func CreateRecallTestDatabase(sandboxDir string) error {
 
 	dbFilePath := filepath.Join(recallDir, "recall.db")
 
+	var dbConn *sql.DB
 	dbConn, err = sql.Open("sqlite", dbFilePath)
 	defer func() {
 		if dbConn != nil {
@@ -149,20 +151,20 @@ func CreateRecallTestDatabase(sandboxDir string) error {
 	defer ole.CoUninitialize()
 
 	// CreateTables
-	err = CreateTables(dbConn)
+	err = recall.CreateTables(dbConn)
 	if err != nil {
 		return err
 	}
 
 	// Create mock snapshots
-	snapshot, err := CreateSnapshotNow()
+	snapshot, err := recall.CreateSnapshotNow()
 	if err != nil {
 		return err
 	}
-	snapshots := []*Snapshot{&snapshot}
+	snapshots := []*recall.Snapshot{&snapshot}
 
 	// Insert into the database
-	err = InsertSnapshots(dbConn, snapshots)
+	err = recall.InsertSnapshots(dbConn, snapshots)
 
 	// Close and save the database
 	err = dbConn.Close()

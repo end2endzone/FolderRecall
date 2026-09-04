@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/end2endzone/FolderRecall/internal/build"
 	"github.com/end2endzone/FolderRecall/internal/spinner"
+	"github.com/end2endzone/FolderRecall/internal/version"
 
 	ole "github.com/go-ole/go-ole"
 	// ole2 "github.com/go-ole/go-ole/oleutil"
@@ -58,7 +58,7 @@ func printVersion(verbose bool) {
 	fmt.Fprintf(os.Stdout, "Version %s.\n", GetProductVersionString())
 
 	if verbose {
-		metadata := build.GetBuildMetadata()
+		metadata := version.GetBuildMetadata()
 		fmt.Fprintf(os.Stdout, "Build metadata:%s\n", metadata)
 	}
 }

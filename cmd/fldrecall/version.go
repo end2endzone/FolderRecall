@@ -6,7 +6,7 @@ import (
 	"time"
 
 	root "github.com/end2endzone/FolderRecall"
-	"github.com/end2endzone/FolderRecall/internal/build"
+	"github.com/end2endzone/FolderRecall/internal/version"
 
 	"golang.org/x/mod/semver"
 )
@@ -165,9 +165,9 @@ func CreateInvalidProductVersion() ProductVersion {
 func GetProductVersionFromMetadata() ProductVersion {
 	p := CreateInvalidProductVersion()
 
-	version := build.GetVersionFromMetadata()
-	revision, datetime := build.GetGitHashAndDateFromMetadata()
-	if version == "" || revision == "" || datetime == "" {
+	versionStr := version.GetVersionFromMetadata()
+	revision, datetime := version.GetGitHashAndDateFromMetadata()
+	if versionStr == "" || revision == "" || datetime == "" {
 		// Metadata not available or not compiled from git version control.
 		// Return an invalid ProductVersion
 		return p
@@ -176,7 +176,7 @@ func GetProductVersionFromMetadata() ProductVersion {
 	// Version: if installed via `go install` tagged release (for example `@v1.2.3`)
 	// Warning: version can default to `(devel)` if run locally or built without version flags.
 	// For example, if you run your app using `go run .` or compile it locally without tags, Go sets info.Main.Version to the string "(devel)".
-	p.Version = version
+	p.Version = versionStr
 
 	// Remove `+dirty` from version and standardizes it
 	p.Version = semver.Canonical(p.Version)
@@ -267,7 +267,7 @@ func GetProductVersion() ProductVersion {
 	}
 
 	// Try to build a ProductVersion from the version metadata.
-	tagName := build.GetVersionFromMetadata()
+	tagName := version.GetVersionFromMetadata()
 	if tagName != "" && tagName != "(devel)" {
 		// Strip the leading "v" to only get the digits and pre-release labels
 		tagName = strings.TrimPrefix(tagName, "v")

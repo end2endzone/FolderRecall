@@ -22,21 +22,13 @@ if (-not [string]::IsNullOrEmpty($env:GOARCH)) {
     Write-Output "GOARCH is not set and is forced to: $env:GOARCH"
 }
 
-# Define the target binary file path based on the environment
-$Target="$ProjectRoot\bin\fldrecall.exe"
-if ($env:CI -eq "true") {
-    $Target="$ProjectRoot\bin\fldrecall-$env:GOOS-$env:GOARCH.exe"
-    Write-Host "Building on CI/CD server. Changing the target file name to '$Target'"
-}
-
 # Ensures your binary does not depend on host operating system C libraries, making the binary completely portable.
 $env:CGO_ENABLED = "0"
 
-# Point this to the exact package path where your main function lives
-$Pkg = "main"
-
 # Read current version
 $Version = Get-Content -Path "VERSION" -Raw
+
+Write-Host ""
 
 Write-Host "Generating..."
 # Run generators recursively across your entire project.
@@ -58,6 +50,39 @@ try {
 finally {
     $Env:GOARCH = $oldGOARCH
 }
+Write-Host "done"
+Write-Host ""
+
+########################
+# advanced-debug-sandbox
+########################
+
+# Define the target binary file path based on the environment
+$Target="$ProjectRoot\cmd\advanced-debug-sandbox\advanced-debug-sandbox.exe"
+if ($env:CI -eq "true") {
+    $Target="$ProjectRoot\cmd\advanced-debug-sandbox-$env:GOOS-$env:GOARCH.exe"
+    Write-Host "Building on CI/CD server. Changing the target file name to '$Target'"
+}
+
+Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."
+# Run build from the root, pointing to the main package directory
+go build -o $Target ./cmd/advanced-debug-sandbox
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to build go code: exit code $LASTEXITCODE"
+}
+Write-Host "done"
+Write-Host ""
+
+############
+# fldrecall
+############
+
+# Define the target binary file path based on the environment
+$Target="$ProjectRoot\bin\fldrecall.exe"
+if ($env:CI -eq "true") {
+    $Target="$ProjectRoot\bin\fldrecall-$env:GOOS-$env:GOARCH.exe"
+    Write-Host "Building on CI/CD server. Changing the target file name to '$Target'"
+}
 
 Write-Host "Building $(Split-Path -Leaf $Target) version $Version..."
 # Run build from the root, pointing to the main package directory
@@ -65,6 +90,8 @@ go build -o $Target ./cmd/fldrecall
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to build go code: exit code $LASTEXITCODE"
 }
+Write-Host "done"
+Write-Host ""
 
 Write-Host "Build complete!"
 Write-Host

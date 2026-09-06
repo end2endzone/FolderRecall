@@ -33,7 +33,8 @@ desktop.ini
 # Temporary files & resources
 cmd/fldrecall/resource.syso
 cmd/fldrecall/versioninfo.json
-cmd/fldrecall/__debug_bin.exe
+cmd/fldrecall/*.exe
+cmd/advanced-debug-sandbox/*.exe
 resources/icon16.png
 resources/icon32.png
 resources/icon64.png

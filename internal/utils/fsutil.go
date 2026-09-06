@@ -120,8 +120,52 @@ func CopyFile(src string, dst string) error {
 
 // FileExists checks if a file exists for the given path
 func FileExists(path string) bool {
-	_ /*info*/, err := os.Stat(path)
-	return err == nil
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if !info.IsDir() {
+		return true
+	}
+	return false
+}
+
+// DirExists checks if a file exists for the given path
+func DirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return true
+	}
+	return false
+}
+
+// FileExistsOrError checks if a file exists for the given path.
+// Returns nil if the file exists, return an error otherwise.
+func FileExistsOrError(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("path is not a file: %s", path)
+	}
+	return nil
+}
+
+// FileExistsOrError checks if a file exists for the given path.
+// Returns nil if the file exists, return an error otherwise.
+func DirExistsOrError(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", path)
+	}
+	return nil
 }
 
 // GetFileSize returns the size of a file in bytes or an error.

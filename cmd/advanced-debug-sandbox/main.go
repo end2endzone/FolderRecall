@@ -8,52 +8,9 @@ import (
 	"runtime"
 
 	"github.com/end2endzone/FolderRecall/internal/recall"
+	"github.com/end2endzone/FolderRecall/internal/utils"
 	"github.com/go-ole/go-ole"
 )
-
-func IsDirExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	if info.IsDir() {
-		return true
-	}
-	return false
-}
-
-func IsFileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	if !info.IsDir() {
-		return true
-	}
-	return false
-}
-
-func DirExistsOrError(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("path is not a directory: %s", path)
-	}
-	return nil
-}
-
-func FileExistsOrError(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return fmt.Errorf("path is not a file: %s", path)
-	}
-	return nil
-}
 
 func FindProjectDir() (string, error) {
 	// Note:
@@ -69,7 +26,7 @@ func FindProjectDir() (string, error) {
 	{
 		projectDir := currentDir
 		sandboxDir := filepath.Join(projectDir, ".debug-sandbox")
-		if IsDirExists(sandboxDir) {
+		if utils.DirExists(sandboxDir) {
 			// This directory exists.
 			return projectDir, nil
 		}
@@ -80,7 +37,7 @@ func FindProjectDir() (string, error) {
 		advancedDir := currentDir
 		projectDir := filepath.Dir(filepath.Dir(advancedDir))
 		sandboxDir := filepath.Join(projectDir, ".debug-sandbox")
-		if IsDirExists(sandboxDir) {
+		if utils.DirExists(sandboxDir) {
 			// This directory exists.
 			return projectDir, nil
 		}
@@ -90,7 +47,7 @@ func FindProjectDir() (string, error) {
 	{
 		projectDir := filepath.Dir(currentDir)
 		sandboxDir := filepath.Join(projectDir, ".debug-sandbox")
-		if IsDirExists(sandboxDir) {
+		if utils.DirExists(sandboxDir) {
 			// This directory exists.
 			return projectDir, nil
 		}
@@ -121,7 +78,7 @@ func CreateTempDirectories(sandboxDir string) error {
 
 func CreateRecallTestDatabase(sandboxDir string) error {
 	testDataDir := filepath.Join(sandboxDir, "testdata")
-	err := DirExistsOrError(testDataDir)
+	err := utils.DirExistsOrError(testDataDir)
 	if err != nil {
 		return err
 	}
@@ -187,7 +144,7 @@ func main() {
 
 	// Find sandbox directory
 	sandboxDir := filepath.Join(projectDir, ".debug-sandbox")
-	err = DirExistsOrError(sandboxDir)
+	err = utils.DirExistsOrError(sandboxDir)
 	if err != nil {
 		panic(err)
 	}

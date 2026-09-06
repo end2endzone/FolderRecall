@@ -13,6 +13,18 @@
             "program": "${fileDirname}"
         },
         {
+            "name": "advanced-debug-sandbox",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/cmd/advanced-debug-sandbox",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "debug: reset sandbox",
+            "args": [
+            ]
+        },
+        {
             "name": "fldrecall (no args)",
             "type": "go",
             "request": "launch",

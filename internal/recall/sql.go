@@ -362,8 +362,15 @@ func GetSnapshotsInInterval(db *sql.DB, start time.Time, end time.Time) ([]*Snap
 func GetFirstSnapshotIdInInterval(db *sql.DB, start time.Time, end time.Time) (int, error) {
 	matchingId := InvalidId
 
+	// Make sure start < end times
+	if end.Before(start) {
+		tmp := start
+		start = end
+		end = tmp
+	}
+
 	// Order by timestamp descending and limit to 1 to find the newest entry
-	query := `SELECT id FROM snapshots WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC LIMIT 1`
+	query := `SELECT id FROM snapshots WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC LIMIT 1`
 	rows, err := db.Query(query, start, end)
 	if err != nil {
 		return InvalidId, err
@@ -433,7 +440,7 @@ func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 	// append the first snapshots of the last 5 days
 	for i := 5; i >= 1; i-- {
 		starTime := now.AddDate(0, 0, -i)
-		endTime := starTime.AddDate(0, 0, 1).Add(-1 * time.Hour) // minus 1 hour to not also include the same snapshot of next hour band
+		endTime := starTime.AddDate(0, 0, 1)
 
 		id, err := GetFirstSnapshotIdInInterval(db, starTime, endTime)
 		if err != nil {
@@ -456,7 +463,7 @@ func GetSnapshotRecallCandidates(db *sql.DB) (*Candidates, error) {
 	// append the first snapshots of the last 24 hours
 	for i := 24; i >= 1; i-- {
 		starTime := now.Add(time.Duration(-i) * time.Hour)
-		endTime := starTime.Add(1 * time.Hour).Add(-1 * time.Minute) // minus 1 minute to not also include the same snapshot of next hour band
+		endTime := starTime.Add(1 * time.Hour)
 
 		id, err := GetFirstSnapshotIdInInterval(db, starTime, endTime)
 		if err != nil {
